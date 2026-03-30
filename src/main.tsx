@@ -1,11 +1,8 @@
 import { createRoot } from "react-dom/client";
+import { hasSupabaseConfig } from "./integrations/supabase/config";
 import "./index.css";
 
 const root = createRoot(document.getElementById("root")!);
-const hasSupabaseConfig = Boolean(
-  import.meta.env.VITE_SUPABASE_URL &&
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-);
 
 if (!hasSupabaseConfig) {
   root.render(
