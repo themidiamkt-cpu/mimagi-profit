@@ -31,6 +31,27 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchProfile = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching profile:', error);
+        return;
+      }
+
+      if (data) {
+        setProfile(data as Profile);
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    }
+  }, []);
+
   // Setup auth state listener FIRST, then check session
   useEffect(() => {
     // Set up listener first
@@ -63,28 +84,7 @@ export function useAuth() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error);
-        return;
-      }
-
-      if (data) {
-        setProfile(data as Profile);
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    }
-  };
+  }, [fetchProfile]);
 
   const signUp = useCallback(async (signUpData: SignUpData) => {
     try {
@@ -149,11 +149,17 @@ export function useAuth() {
   const signIn = useCallback(async (email: string, password: string) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim().toLowerCase(),
         password,
       });
 
       if (error) throw error;
+
+      if (data.session?.user) {
+        setSession(data.session);
+        setUser(data.session.user);
+        await fetchProfile(data.session.user.id);
+      }
 
       toast({
         title: 'Login realizado!',
@@ -167,6 +173,8 @@ export function useAuth() {
       let message = 'Não foi possível fazer login.';
       if (error.message?.includes('Invalid login credentials')) {
         message = 'Email ou senha incorretos.';
+      } else if (error.message?.includes('Email not confirmed')) {
+        message = 'Confirme seu email antes de fazer login.';
       }
 
       toast({
@@ -177,7 +185,7 @@ export function useAuth() {
 
       return { success: false, error: message };
     }
-  }, []);
+  }, [fetchProfile]);
 
   const signOut = useCallback(async () => {
     try {
