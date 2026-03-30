@@ -4,6 +4,11 @@ export interface CanalVenda {
   nome: string;
   perc: number;
   ticket: number;
+  meta_semanal: number;
+  realizado_semana_1: number;
+  realizado_semana_2: number;
+  realizado_semana_3: number;
+  realizado_semana_4: number;
   invest: number;
   cpv: number;
   conv: number;
@@ -280,13 +285,13 @@ export const defaultPlanejamento: PlanejamentoFinanceiro = {
   
   // Seção 13: Canais de Venda Dinâmicos
   canais_venda: [
-    { id: '1', nome: 'Loja Física', perc: 30, ticket: 180, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
-    { id: '2', nome: 'Instagram Ads', perc: 25, ticket: 150, invest: 2000, cpv: 25, conv: 2.5, hasInvest: true, roas_esperado: 5 },
-    { id: '3', nome: 'Instagram Orgânico', perc: 15, ticket: 150, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
-    { id: '4', nome: 'WhatsApp', perc: 10, ticket: 140, invest: 300, cpv: 10, conv: 15, hasInvest: true, roas_esperado: 8 },
-    { id: '5', nome: 'Shopee', perc: 10, ticket: 120, invest: 500, cpv: 15, conv: 3, hasInvest: true, roas_esperado: 4 },
-    { id: '6', nome: 'Indicações/Recorrência', perc: 5, ticket: 180, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
-    { id: '7', nome: 'Eventos/Ações', perc: 5, ticket: 180, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
+    { id: '1', nome: 'Loja Física', perc: 30, ticket: 180, meta_semanal: 1500, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
+    { id: '2', nome: 'Instagram Ads', perc: 25, ticket: 150, meta_semanal: 1250, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 2000, cpv: 25, conv: 2.5, hasInvest: true, roas_esperado: 5 },
+    { id: '3', nome: 'Instagram Orgânico', perc: 15, ticket: 150, meta_semanal: 750, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
+    { id: '4', nome: 'WhatsApp', perc: 10, ticket: 140, meta_semanal: 500, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 300, cpv: 10, conv: 15, hasInvest: true, roas_esperado: 8 },
+    { id: '5', nome: 'Shopee', perc: 10, ticket: 120, meta_semanal: 500, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 500, cpv: 15, conv: 3, hasInvest: true, roas_esperado: 4 },
+    { id: '6', nome: 'Indicações/Recorrência', perc: 5, ticket: 180, meta_semanal: 250, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
+    { id: '7', nome: 'Eventos/Ações', perc: 5, ticket: 180, meta_semanal: 250, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
   ],
   
   // Campos legados para compatibilidade

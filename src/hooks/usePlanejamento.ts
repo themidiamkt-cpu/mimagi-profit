@@ -19,21 +19,31 @@ export function usePlanejamento(userId: string | null) {
     }
   }, [userId]);
 
-  const parseCanaisVenda = (jsonData: unknown): CanalVenda[] => {
+  const parseCanaisVenda = (jsonData: unknown, faturamentoMensalPlanejado: number): CanalVenda[] => {
     if (!jsonData || !Array.isArray(jsonData)) {
       return defaultPlanejamento.canais_venda;
     }
-    return jsonData.map((item: Record<string, unknown>, index: number) => ({
-      id: String(item.id || index + 1),
-      nome: String(item.nome || ''),
-      perc: Number(item.perc) || 0,
-      ticket: Number(item.ticket) || 0,
-      invest: Number(item.invest) || 0,
-      cpv: Number(item.cpv) || 0,
-      conv: Number(item.conv) || 0,
-      hasInvest: Boolean(item.hasInvest),
-      roas_esperado: Number(item.roas_esperado) || 0,
-    }));
+    return jsonData.map((item: Record<string, unknown>, index: number) => {
+      const perc = Number(item.perc) || 0;
+      const metaPadrao = (faturamentoMensalPlanejado * (perc / 100)) / 4;
+
+      return {
+        id: String(item.id || index + 1),
+        nome: String(item.nome || ''),
+        perc,
+        ticket: Number(item.ticket) || 0,
+        meta_semanal: Number(item.meta_semanal) || metaPadrao,
+        realizado_semana_1: Number(item.realizado_semana_1) || 0,
+        realizado_semana_2: Number(item.realizado_semana_2) || 0,
+        realizado_semana_3: Number(item.realizado_semana_3) || 0,
+        realizado_semana_4: Number(item.realizado_semana_4) || 0,
+        invest: Number(item.invest) || 0,
+        cpv: Number(item.cpv) || 0,
+        conv: Number(item.conv) || 0,
+        hasInvest: Boolean(item.hasInvest),
+        roas_esperado: Number(item.roas_esperado) || 0,
+      };
+    });
   };
 
   const parseCustosExtras = (jsonData: unknown): CustoExtra[] => {
@@ -64,9 +74,14 @@ export function usePlanejamento(userId: string | null) {
       if (records && records.length > 0) {
         const record = records[0];
         setRecordId(record.id);
+
+        const investimentoCiclo =
+          Number(record.investimento_ciclo) || defaultPlanejamento.investimento_ciclo;
+        const margem = Number(record.margem) || defaultPlanejamento.margem;
+        const faturamentoMensalPlanejado = (investimentoCiclo / 6) * margem;
         
         // Parse canais_venda and custos_extras from JSON
-        const canaisVenda = parseCanaisVenda(record.canais_venda);
+        const canaisVenda = parseCanaisVenda(record.canais_venda, faturamentoMensalPlanejado);
         const custosExtras = parseCustosExtras(record.custos_extras);
         
         setData({
