@@ -13,6 +13,7 @@ interface DashboardContextType {
   loading: boolean;
   saving: boolean;
   updateField: <K extends keyof PlanejamentoFinanceiro>(field: K, value: PlanejamentoFinanceiro[K]) => void;
+  setCanaisMesAtivo: (mes: string) => void;
   calculateSimulation: (faturamentoDesejado: number) => SimulationValues;
   recordId: string | null;
   
@@ -41,6 +42,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     loading: planejamentoLoading, 
     saving: planejamentoSaving, 
     updateField, 
+    setCanaisMesAtivo,
     calculateSimulation, 
     recordId 
   } = usePlanejamento(userId);
@@ -72,6 +74,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       loading,
       saving,
       updateField,
+      setCanaisMesAtivo,
       calculateSimulation,
       recordId,
       compras,

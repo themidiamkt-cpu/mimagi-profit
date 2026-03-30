@@ -16,6 +16,8 @@ export interface CanalVenda {
   roas_esperado: number;
 }
 
+export type CanaisVendaPorMes = Record<string, CanalVenda[]>;
+
 // Interface para custo extra dinâmico
 export interface CustoExtra {
   id: string;
@@ -116,6 +118,8 @@ export interface PlanejamentoFinanceiro {
   
   // Seção 13: Canais de Venda Dinâmicos
   canais_venda: CanalVenda[];
+  canais_venda_mes_ativo: string;
+  canais_venda_por_mes: CanaisVendaPorMes;
   
   // Campos legados (mantidos para compatibilidade)
   canal_loja_fisica_perc: number;
@@ -219,6 +223,21 @@ export interface Alert {
   active?: boolean;
 }
 
+export const getCurrentMonthKey = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+export const createDefaultCanaisVenda = (): CanalVenda[] => [
+  { id: '1', nome: 'Loja Física', perc: 30, ticket: 180, meta_semanal: 1500, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
+  { id: '2', nome: 'Instagram Ads', perc: 25, ticket: 150, meta_semanal: 1250, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 2000, cpv: 25, conv: 2.5, hasInvest: true, roas_esperado: 5 },
+  { id: '3', nome: 'Instagram Orgânico', perc: 15, ticket: 150, meta_semanal: 750, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
+  { id: '4', nome: 'WhatsApp', perc: 10, ticket: 140, meta_semanal: 500, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 300, cpv: 10, conv: 15, hasInvest: true, roas_esperado: 8 },
+  { id: '5', nome: 'Shopee', perc: 10, ticket: 120, meta_semanal: 500, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 500, cpv: 15, conv: 3, hasInvest: true, roas_esperado: 4 },
+  { id: '6', nome: 'Indicações/Recorrência', perc: 5, ticket: 180, meta_semanal: 250, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
+  { id: '7', nome: 'Eventos/Ações', perc: 5, ticket: 180, meta_semanal: 250, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
+];
+
+const defaultCanaisVendaMesAtivo = getCurrentMonthKey();
+
 export const defaultPlanejamento: PlanejamentoFinanceiro = {
   investimento_ciclo: 60000,
   margem: 2,
@@ -284,15 +303,11 @@ export const defaultPlanejamento: PlanejamentoFinanceiro = {
   custos_extras: [],
   
   // Seção 13: Canais de Venda Dinâmicos
-  canais_venda: [
-    { id: '1', nome: 'Loja Física', perc: 30, ticket: 180, meta_semanal: 1500, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
-    { id: '2', nome: 'Instagram Ads', perc: 25, ticket: 150, meta_semanal: 1250, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 2000, cpv: 25, conv: 2.5, hasInvest: true, roas_esperado: 5 },
-    { id: '3', nome: 'Instagram Orgânico', perc: 15, ticket: 150, meta_semanal: 750, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
-    { id: '4', nome: 'WhatsApp', perc: 10, ticket: 140, meta_semanal: 500, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 300, cpv: 10, conv: 15, hasInvest: true, roas_esperado: 8 },
-    { id: '5', nome: 'Shopee', perc: 10, ticket: 120, meta_semanal: 500, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 500, cpv: 15, conv: 3, hasInvest: true, roas_esperado: 4 },
-    { id: '6', nome: 'Indicações/Recorrência', perc: 5, ticket: 180, meta_semanal: 250, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
-    { id: '7', nome: 'Eventos/Ações', perc: 5, ticket: 180, meta_semanal: 250, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
-  ],
+  canais_venda: createDefaultCanaisVenda(),
+  canais_venda_mes_ativo: defaultCanaisVendaMesAtivo,
+  canais_venda_por_mes: {
+    [defaultCanaisVendaMesAtivo]: createDefaultCanaisVenda(),
+  },
   
   // Campos legados para compatibilidade
   canal_loja_fisica_perc: 30,

@@ -10,6 +10,7 @@ interface PlanejamentoCanaisProps {
   data: PlanejamentoFinanceiro;
   calculated: CalculatedValues;
   updateField: <K extends keyof PlanejamentoFinanceiro>(field: K, value: PlanejamentoFinanceiro[K]) => void;
+  setCanaisMesAtivo: (mes: string) => void;
 }
 
 const COLORS = ['#1e4d4d', '#2d6b6b', '#3d8989', '#4da7a7', '#5dc5c5', '#6de3e3', '#7dffff', '#8effef', '#9effff', '#aeffff'];
@@ -20,14 +21,29 @@ const WEEK_FIELDS = [
   { key: 'realizado_semana_4', label: 'Semana 4' },
 ] as const;
 
-export function PlanejamentoCanais({ data, calculated, updateField }: PlanejamentoCanaisProps) {
+const formatMonthLabel = (mes: string) => {
+  const [ano, mesNumero] = mes.split('-').map(Number);
+
+  if (!ano || !mesNumero) {
+    return mes;
+  }
+
+  return new Date(ano, mesNumero - 1, 1).toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  });
+};
+
+export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMesAtivo }: PlanejamentoCanaisProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [newCanalName, setNewCanalName] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   
   const faturamentoMensal = calculated.faturamento_mensal;
+  const faturamentoSemanal = faturamentoMensal / 4;
   const canais = data.canais_venda;
+  const mesesSalvos = Object.keys(data.canais_venda_por_mes).sort().reverse();
 
   // Soma dos percentuais
   const somaPerc = canais.reduce((acc, c) => acc + c.perc, 0);
@@ -36,26 +52,25 @@ export function PlanejamentoCanais({ data, calculated, updateField }: Planejamen
   // Investimento total
   const investimentoTotal = canais.reduce((acc, c) => acc + (c.invest || 0), 0);
 
+  const calculateMetaSemanal = (perc: number) => faturamentoSemanal * (perc / 100);
+
   // Cálculos por canal
   const canaisCalculados = canais.map(canal => {
     const faturamentoEsperado = faturamentoMensal * (canal.perc / 100);
-    const metaMensalPlanejada = canal.meta_semanal * 4;
+    const metaSemanalPlanejada = calculateMetaSemanal(canal.perc);
+    const metaMensalPlanejada = metaSemanalPlanejada * 4;
     const realizadoMensal =
       canal.realizado_semana_1 +
       canal.realizado_semana_2 +
       canal.realizado_semana_3 +
       canal.realizado_semana_4;
     const pecasPlanejadasSemana =
-      canal.ticket > 0 ? Math.ceil(canal.meta_semanal / canal.ticket) : 0;
+      canal.ticket > 0 ? Math.ceil(metaSemanalPlanejada / canal.ticket) : 0;
     const pecasNecessarias = canal.ticket > 0 ? Math.ceil(faturamentoEsperado / canal.ticket) : 0;
     const roas = canal.roas_esperado || null;
     const vendasParaPagarInvest = canal.invest && canal.ticket > 0 ? Math.ceil(canal.invest / canal.ticket) : null;
     const atingimentoMeta = metaMensalPlanejada > 0 ? realizadoMensal / metaMensalPlanejada : null;
     const gapMetaMensal = metaMensalPlanejada - realizadoMensal;
-    const divergenciaPlanejamento =
-      metaMensalPlanejada > 0 &&
-      faturamentoEsperado > 0 &&
-      Math.abs(metaMensalPlanejada - faturamentoEsperado) / faturamentoEsperado > 0.1;
     
     let status: 'verde' | 'amarelo' | 'vermelho' = 'verde';
     if (roas !== null && canal.hasInvest) {
@@ -66,6 +81,7 @@ export function PlanejamentoCanais({ data, calculated, updateField }: Planejamen
     return {
       ...canal,
       faturamentoEsperado,
+      metaSemanalPlanejada,
       metaMensalPlanejada,
       realizadoMensal,
       pecasPlanejadasSemana,
@@ -74,12 +90,11 @@ export function PlanejamentoCanais({ data, calculated, updateField }: Planejamen
       vendasParaPagarInvest,
       atingimentoMeta,
       gapMetaMensal,
-      divergenciaPlanejamento,
       status,
     };
   });
 
-  const metaSemanalTotal = canaisCalculados.reduce((acc, c) => acc + c.meta_semanal, 0);
+  const metaSemanalTotal = canaisCalculados.reduce((acc, c) => acc + c.metaSemanalPlanejada, 0);
   const metaMensalCanais = canaisCalculados.reduce((acc, c) => acc + c.metaMensalPlanejada, 0);
   const realizadoMensalCanais = canaisCalculados.reduce((acc, c) => acc + c.realizadoMensal, 0);
   const gapMensalCanais = metaMensalCanais - realizadoMensalCanais;
@@ -107,24 +122,11 @@ export function PlanejamentoCanais({ data, calculated, updateField }: Planejamen
     alertasCanais.push({ type: 'danger', message: `A soma da participação dos canais é ${somaPerc.toFixed(1)}%. Deve ser 100%.` });
   }
 
-  if (metaMensalCanais > 0 && Math.abs(metaMensalCanais - faturamentoMensal) / faturamentoMensal > 0.05) {
-    alertasCanais.push({
-      type: 'warning',
-      message: `A soma das metas semanais projetadas para o mes (${formatCurrency(metaMensalCanais)}) esta diferente da meta mensal geral (${formatCurrency(faturamentoMensal)}).`,
-    });
-  }
-  
   canaisCalculados.forEach(c => {
     if (c.hasInvest && c.roas !== null && c.roas < 1) {
       alertasCanais.push({ type: 'danger', message: `ROAS do canal ${c.nome} está abaixo de 1 (${c.roas.toFixed(2)}). Investimento não se paga.` });
     } else if (c.hasInvest && c.roas !== null && c.roas < 3) {
       alertasCanais.push({ type: 'warning', message: `ROAS do canal ${c.nome} está entre 1 e 3 (${c.roas.toFixed(2)}). Atenção ao retorno.` });
-    }
-    if (c.divergenciaPlanejamento) {
-      alertasCanais.push({
-        type: 'warning',
-        message: `Canal ${c.nome}: a meta semanal cadastrada projeta ${formatCurrency(c.metaMensalPlanejada)} no mes, diferente do planejado pelo percentual (${formatCurrency(c.faturamentoEsperado)}).`,
-      });
     }
   });
 
@@ -147,7 +149,15 @@ export function PlanejamentoCanais({ data, calculated, updateField }: Planejamen
   // Funções para gerenciar canais
   const updateCanal = <K extends keyof CanalVenda>(id: string, field: K, value: CanalVenda[K]) => {
     const updatedCanais = canais.map(c => 
-      c.id === id ? { ...c, [field]: value } : c
+      c.id === id
+        ? {
+            ...c,
+            [field]: value,
+            ...(field === 'perc'
+              ? { meta_semanal: calculateMetaSemanal(Number(value)) }
+              : {}),
+          }
+        : c
     );
     updateField('canais_venda', updatedCanais);
   };
@@ -203,6 +213,34 @@ export function PlanejamentoCanais({ data, calculated, updateField }: Planejamen
   return (
     <div className="space-y-6">
       <SectionCard title="13. PLANEJAMENTO POR CANAIS DE VENDA">
+        <div className="mb-6 p-4 bg-muted/30 border border-border">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="text-sm font-medium text-muted-foreground">Competência ativa dos canais</div>
+              <div className="text-2xl font-semibold capitalize">{formatMonthLabel(data.canais_venda_mes_ativo)}</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Cada mês guarda seu próprio planejado e realizado semanal.
+              </div>
+            </div>
+            <div className="w-full lg:w-56">
+              <label className="block text-sm font-medium text-muted-foreground mb-1">
+                Selecionar mês
+              </label>
+              <input
+                type="month"
+                value={data.canais_venda_mes_ativo}
+                onChange={(e) => setCanaisMesAtivo(e.target.value)}
+                className="w-full px-3 py-2 bg-background border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+          {mesesSalvos.length > 1 && (
+            <div className="mt-3 text-sm text-muted-foreground">
+              Meses salvos: {mesesSalvos.map(formatMonthLabel).join(' • ')}
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <div className="p-4 bg-primary/10 border border-primary/30">
             <div className="text-sm font-medium text-muted-foreground">Faturamento Mensal Total (Meta)</div>
@@ -342,13 +380,9 @@ export function PlanejamentoCanais({ data, calculated, updateField }: Planejamen
                       />
                     </td>
                     <td className="p-2">
-                      <input
-                        type="number"
-                        value={canal.meta_semanal}
-                        onChange={(e) => updateCanal(canal.id, 'meta_semanal', Number(e.target.value))}
-                        className="w-28 px-2 py-1 bg-background border border-border text-foreground text-center font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                        min={0}
-                      />
+                      <div className="w-28 px-2 py-1 bg-muted/40 border border-border text-foreground text-center font-mono text-sm">
+                        {formatCurrency(canaisCalculados.find((item) => item.id === canal.id)?.metaSemanalPlanejada || 0)}
+                      </div>
                     </td>
                     <td className="p-2">
                       <input
@@ -534,7 +568,7 @@ export function PlanejamentoCanais({ data, calculated, updateField }: Planejamen
                     <td className="p-3 font-medium">{canal.nome}</td>
                     <td className="text-right p-3 font-mono">{formatPercent(canal.perc)}</td>
                     <td className="text-right p-3 font-mono">{formatCurrency(canal.faturamentoEsperado)}</td>
-                    <td className="text-right p-3 font-mono">{formatCurrency(canal.meta_semanal)}</td>
+                      <td className="text-right p-3 font-mono">{formatCurrency(canal.metaSemanalPlanejada)}</td>
                     <td className="text-right p-3 font-mono">{formatCurrency(canal.metaMensalPlanejada)}</td>
                     <td className="text-right p-3 font-mono">{formatCurrency(canal.ticket)}</td>
                     <td className="text-right p-3 font-mono">{canal.pecasPlanejadasSemana}</td>

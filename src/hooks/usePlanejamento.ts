@@ -1,7 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { PlanejamentoFinanceiro, CalculatedValues, SimulationValues, Alert, defaultPlanejamento, CanalVenda, CustoExtra } from '@/types/financial';
+import { PlanejamentoFinanceiro, CalculatedValues, SimulationValues, Alert, defaultPlanejamento, CanalVenda, CustoExtra, CanaisVendaPorMes, createDefaultCanaisVenda, getCurrentMonthKey } from '@/types/financial';
 import { toast } from '@/hooks/use-toast';
+
+interface ParsedCanaisVenda {
+  canaisVenda: CanalVenda[];
+  canaisVendaPorMes: CanaisVendaPorMes;
+  canaisVendaMesAtivo: string;
+}
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const cloneCanaisVenda = (canais: CanalVenda[]) =>
+  canais.map((canal) => ({ ...canal }));
+
+const cloneCanaisVendaForNewMonth = (canais: CanalVenda[]) =>
+  canais.map((canal) => ({
+    ...canal,
+    realizado_semana_1: 0,
+    realizado_semana_2: 0,
+    realizado_semana_3: 0,
+    realizado_semana_4: 0,
+  }));
 
 export function usePlanejamento(userId: string | null) {
   const [data, setData] = useState<PlanejamentoFinanceiro>(defaultPlanejamento);
@@ -19,16 +40,28 @@ export function usePlanejamento(userId: string | null) {
     }
   }, [userId]);
 
-  const parseCanaisVenda = (jsonData: unknown, faturamentoMensalPlanejado: number): CanalVenda[] => {
+  const parseCanalList = (jsonData: unknown, faturamentoMensalPlanejado: number): CanalVenda[] => {
     if (!jsonData || !Array.isArray(jsonData)) {
-      return defaultPlanejamento.canais_venda;
+      return cloneCanaisVenda(createDefaultCanaisVenda());
     }
+    const usedIds = new Set<string>();
+
     return jsonData.map((item: Record<string, unknown>, index: number) => {
       const perc = Number(item.perc) || 0;
       const metaPadrao = (faturamentoMensalPlanejado * (perc / 100)) / 4;
+      const rawId = String(item.id || `canal-${index + 1}`);
+      let safeId = rawId;
+      let duplicateIndex = 1;
+
+      while (usedIds.has(safeId)) {
+        safeId = `${rawId}-${duplicateIndex}`;
+        duplicateIndex += 1;
+      }
+
+      usedIds.add(safeId);
 
       return {
-        id: String(item.id || index + 1),
+        id: safeId,
         nome: String(item.nome || ''),
         perc,
         ticket: Number(item.ticket) || 0,
@@ -44,6 +77,71 @@ export function usePlanejamento(userId: string | null) {
         roas_esperado: Number(item.roas_esperado) || 0,
       };
     });
+  };
+
+  const ensureMonthChannels = (canaisPorMes: CanaisVendaPorMes, mes: string): CanaisVendaPorMes => {
+    if (canaisPorMes[mes]) {
+      return canaisPorMes;
+    }
+
+    const mesesOrdenados = Object.keys(canaisPorMes).sort();
+    const ultimoMesComDados = mesesOrdenados[mesesOrdenados.length - 1];
+    const canaisBase = ultimoMesComDados
+      ? canaisPorMes[ultimoMesComDados]
+      : createDefaultCanaisVenda();
+
+    return {
+      ...canaisPorMes,
+      [mes]: cloneCanaisVendaForNewMonth(canaisBase),
+    };
+  };
+
+  const parseCanaisVenda = (jsonData: unknown, faturamentoMensalPlanejado: number): ParsedCanaisVenda => {
+    const mesAtual = getCurrentMonthKey();
+
+    if (Array.isArray(jsonData)) {
+      const canaisVenda = parseCanalList(jsonData, faturamentoMensalPlanejado);
+
+      return {
+        canaisVenda,
+        canaisVendaMesAtivo: mesAtual,
+        canaisVendaPorMes: {
+          [mesAtual]: cloneCanaisVenda(canaisVenda),
+        },
+      };
+    }
+
+    if (!isObjectRecord(jsonData) || !isObjectRecord(jsonData.meses)) {
+      const canaisVenda = cloneCanaisVenda(defaultPlanejamento.canais_venda);
+
+      return {
+        canaisVenda,
+        canaisVendaMesAtivo: defaultPlanejamento.canais_venda_mes_ativo,
+        canaisVendaPorMes: {
+          ...defaultPlanejamento.canais_venda_por_mes,
+        },
+      };
+    }
+
+    const canaisPorMes = Object.entries(jsonData.meses).reduce<CanaisVendaPorMes>((acc, [mes, canaisMes]) => {
+      if (Array.isArray(canaisMes)) {
+        acc[mes] = parseCanalList(canaisMes, faturamentoMensalPlanejado);
+      }
+
+      return acc;
+    }, {});
+
+    const mesAtivoSalvo = typeof jsonData.mes_ativo === 'string' && jsonData.mes_ativo
+      ? jsonData.mes_ativo
+      : mesAtual;
+    const canaisPorMesNormalizados = ensureMonthChannels(canaisPorMes, mesAtivoSalvo);
+    const canaisVenda = cloneCanaisVenda(canaisPorMesNormalizados[mesAtivoSalvo]);
+
+    return {
+      canaisVenda,
+      canaisVendaMesAtivo: mesAtivoSalvo,
+      canaisVendaPorMes: canaisPorMesNormalizados,
+    };
   };
 
   const parseCustosExtras = (jsonData: unknown): CustoExtra[] => {
@@ -81,7 +179,7 @@ export function usePlanejamento(userId: string | null) {
         const faturamentoMensalPlanejado = (investimentoCiclo / 6) * margem;
         
         // Parse canais_venda and custos_extras from JSON
-        const canaisVenda = parseCanaisVenda(record.canais_venda, faturamentoMensalPlanejado);
+        const canaisVendaData = parseCanaisVenda(record.canais_venda, faturamentoMensalPlanejado);
         const custosExtras = parseCustosExtras(record.custos_extras);
         
         setData({
@@ -147,7 +245,9 @@ export function usePlanejamento(userId: string | null) {
           // Custos extras dinâmicos
           custos_extras: custosExtras,
           // Seção 13: Canais de Venda Dinâmicos
-          canais_venda: canaisVenda,
+          canais_venda: canaisVendaData.canaisVenda,
+          canais_venda_mes_ativo: canaisVendaData.canaisVendaMesAtivo,
+          canais_venda_por_mes: canaisVendaData.canaisVendaPorMes,
           // Campos legados
           canal_loja_fisica_perc: Number(record.canal_loja_fisica_perc) ?? defaultPlanejamento.canal_loja_fisica_perc,
           canal_instagram_ads_perc: Number(record.canal_instagram_ads_perc) ?? defaultPlanejamento.canal_instagram_ads_perc,
@@ -199,10 +299,18 @@ export function usePlanejamento(userId: string | null) {
     try {
       setSaving(true);
       
-      // Prepare data for Supabase - convert canais_venda and custos_extras to JSON-compatible format
+      const restData = { ...newData } as Record<string, unknown>;
+      delete restData.canais_venda;
+      delete restData.canais_venda_mes_ativo;
+      delete restData.canais_venda_por_mes;
+
+      // Prepare data for Supabase - keep monthly channel snapshots inside the same JSON field
       const dbData = {
-        ...newData,
-        canais_venda: JSON.parse(JSON.stringify(newData.canais_venda)),
+        ...restData,
+        canais_venda: {
+          mes_ativo: newData.canais_venda_mes_ativo,
+          meses: JSON.parse(JSON.stringify(newData.canais_venda_por_mes)),
+        },
         custos_extras: JSON.parse(JSON.stringify(newData.custos_extras)),
         user_id: userId,
       };
@@ -238,27 +346,61 @@ export function usePlanejamento(userId: string | null) {
     }
   }, [recordId, userId]);
 
+  const scheduleSave = useCallback((newData: PlanejamentoFinanceiro) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      saveData(newData);
+    }, 2000);
+  }, [saveData]);
+
   // Autosave com delay de 2s
   const updateField = useCallback(<K extends keyof PlanejamentoFinanceiro>(
     field: K, 
     value: PlanejamentoFinanceiro[K]
   ) => {
     setData(prev => {
-      const newData = { ...prev, [field]: value };
-      
-      // Clear existing timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+      const newData = {
+        ...prev,
+        [field]: value,
+      } as PlanejamentoFinanceiro;
+
+      if (field === 'canais_venda') {
+        newData.canais_venda = cloneCanaisVenda(value as CanalVenda[]);
+        newData.canais_venda_por_mes = {
+          ...prev.canais_venda_por_mes,
+          [prev.canais_venda_mes_ativo]: cloneCanaisVenda(value as CanalVenda[]),
+        };
       }
-      
-      // Set new timeout for autosave
-      saveTimeoutRef.current = setTimeout(() => {
-        saveData(newData);
-      }, 2000);
-      
+
+      scheduleSave(newData);
       return newData;
     });
-  }, [saveData]);
+  }, [scheduleSave]);
+
+  const setCanaisMesAtivo = useCallback((mes: string) => {
+    setData(prev => {
+      const canaisPorMes = prev.canais_venda_por_mes[mes]
+        ? prev.canais_venda_por_mes
+        : {
+            ...prev.canais_venda_por_mes,
+            [mes]: cloneCanaisVendaForNewMonth(
+              prev.canais_venda.length > 0 ? prev.canais_venda : createDefaultCanaisVenda()
+            ),
+          };
+      const newData: PlanejamentoFinanceiro = {
+        ...prev,
+        canais_venda_mes_ativo: mes,
+        canais_venda_por_mes: canaisPorMes,
+        canais_venda: cloneCanaisVenda(canaisPorMes[mes]),
+      };
+
+      scheduleSave(newData);
+      return newData;
+    });
+  }, [scheduleSave]);
 
   // Cálculos automáticos
   const calculated: CalculatedValues = {
@@ -367,6 +509,7 @@ export function usePlanejamento(userId: string | null) {
     loading,
     saving,
     updateField,
+    setCanaisMesAtivo,
     calculateSimulation,
     ticket_medio_geral,
     recordId,
