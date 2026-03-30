@@ -1,0 +1,320 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mimagi Profit Planner - Corporate Design System */
+/* Paleta: Azul petróleo escuro + cinzas neutros + branco */
+/* Fontes: IBM Plex Sans (textos) + IBM Plex Mono (números) */
+/* Sem bordas arredondadas - estilo executivo */
+
+@layer base {
+  :root {
+    /* Core colors - Petrol Blue palette */
+    --background: 210 20% 98%;
+    --foreground: 210 50% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 50% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 50% 10%;
+
+    /* Primary - Deep Petrol Blue */
+    --primary: 210 60% 15%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Medium gray */
+    --secondary: 210 10% 92%;
+    --secondary-foreground: 210 50% 15%;
+
+    /* Muted - Light gray */
+    --muted: 210 15% 95%;
+    --muted-foreground: 210 10% 45%;
+
+    /* Accent - Teal highlight */
+    --accent: 185 60% 35%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive - Alert red */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Warning - Alert orange */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Success - Positive green */
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+
+    /* Info - Blue */
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Borders and inputs */
+    --border: 210 20% 88%;
+    --input: 210 20% 88%;
+    --ring: 210 60% 15%;
+
+    --radius: 0rem;
+
+    /* Chart colors */
+    --chart-1: 210 60% 15%;
+    --chart-2: 185 60% 35%;
+    --chart-3: 210 30% 50%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 142 71% 35%;
+
+    /* Sidebar */
+    --sidebar-background: 210 50% 10%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 185 60% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 18%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 210 30% 20%;
+    --sidebar-ring: 185 60% 45%;
+
+    /* Custom gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(210 60% 15%) 0%, hsl(210 50% 25%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(185 60% 35%) 0%, hsl(185 50% 45%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 35%) 0%, hsl(142 60% 45%) 100%);
+    --gradient-warning: linear-gradient(135deg, hsl(38 92% 50%) 0%, hsl(38 80% 55%) 100%);
+    --gradient-danger: linear-gradient(135deg, hsl(0 72% 51%) 0%, hsl(0 65% 60%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 20% 98%) 100%);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(210 50% 10% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(210 50% 10% / 0.1), 0 2px 4px -2px hsl(210 50% 10% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(210 50% 10% / 0.1), 0 4px 6px -4px hsl(210 50% 10% / 0.1);
+    --shadow-card: 0 1px 3px 0 hsl(210 50% 10% / 0.1), 0 1px 2px -1px hsl(210 50% 10% / 0.1);
+  }
+
+  .dark {
+    --background: 210 50% 8%;
+    --foreground: 210 20% 95%;
+
+    --card: 210 45% 12%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 210 45% 12%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 185 60% 45%;
+    --primary-foreground: 210 50% 8%;
+
+    --secondary: 210 30% 18%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 210 30% 15%;
+    --muted-foreground: 210 15% 60%;
+
+    --accent: 185 60% 40%;
+    --accent-foreground: 210 50% 8%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 30% 20%;
+    --input: 210 30% 20%;
+    --ring: 185 60% 45%;
+
+    --sidebar-background: 210 55% 6%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 185 60% 50%;
+    --sidebar-primary-foreground: 210 50% 8%;
+    --sidebar-accent: 210 40% 15%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 210 30% 15%;
+    --sidebar-ring: 185 60% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  /* Números com fonte mono */
+  .font-mono, 
+  input[type="number"],
+  .numeric-value {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+}
+
+@layer components {
+  /* Corporate card style - no rounded corners */
+  .corporate-card {
+    @apply bg-card border border-border p-6;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Metric card with gradient header */
+  .metric-card {
+    @apply bg-card border border-border overflow-hidden;
+    box-shadow: var(--shadow-md);
+  }
+
+  .metric-card-header {
+    @apply px-4 py-3 text-primary-foreground text-sm font-medium uppercase tracking-wider;
+    background: var(--gradient-primary);
+  }
+
+  .metric-card-value {
+    @apply px-4 py-4 text-3xl font-bold font-mono text-foreground;
+  }
+
+  /* Alert styles */
+  .alert-danger {
+    @apply border-l-4 border-destructive bg-destructive/10 p-4;
+  }
+
+  .alert-warning {
+    @apply border-l-4 border-warning bg-warning/10 p-4;
+  }
+
+  .alert-success {
+    @apply border-l-4 border-success bg-success/10 p-4;
+  }
+
+  .alert-info {
+    @apply border-l-4 border-info bg-info/10 p-4;
+  }
+
+  /* Section header */
+  .section-header {
+    @apply text-lg font-semibold text-foreground uppercase tracking-wide border-b border-border pb-3 mb-6;
+  }
+
+  /* Input corporate style */
+  .corporate-input {
+    @apply w-full px-3 py-2 border border-border bg-background text-foreground font-mono text-right;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary;
+    @apply transition-all duration-200;
+  }
+
+  /* Label style */
+  .corporate-label {
+    @apply text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1 block;
+  }
+
+  /* Stat block */
+  .stat-block {
+    @apply bg-muted/50 border border-border p-4;
+  }
+
+  .stat-label {
+    @apply text-xs font-medium text-muted-foreground uppercase tracking-wider;
+  }
+
+  .stat-value {
+    @apply text-2xl font-bold font-mono text-foreground mt-1;
+  }
+
+  /* Table corporate style */
+  .corporate-table {
+    @apply w-full border-collapse;
+  }
+
+  .corporate-table th {
+    @apply bg-primary text-primary-foreground px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider;
+  }
+
+  .corporate-table td {
+    @apply px-4 py-3 border-b border-border text-sm;
+  }
+
+  .corporate-table tbody tr:hover {
+    @apply bg-muted/50;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply h-2 bg-muted overflow-hidden;
+  }
+
+  .progress-bar-fill {
+    @apply h-full transition-all duration-500;
+    background: var(--gradient-accent);
+  }
+
+  /* Badge variants */
+  .badge-primary {
+    @apply inline-flex items-center px-2 py-1 text-xs font-medium bg-primary text-primary-foreground;
+  }
+
+  .badge-success {
+    @apply inline-flex items-center px-2 py-1 text-xs font-medium bg-success text-success-foreground;
+  }
+
+  .badge-warning {
+    @apply inline-flex items-center px-2 py-1 text-xs font-medium bg-warning text-warning-foreground;
+  }
+
+  .badge-danger {
+    @apply inline-flex items-center px-2 py-1 text-xs font-medium bg-destructive text-destructive-foreground;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Custom animations */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { 
+      opacity: 0; 
+      transform: translateY(10px); 
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0); 
+    }
+  }
+
+  /* Gradient backgrounds */
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .bg-gradient-accent {
+    background: var(--gradient-accent);
+  }
+
+  .bg-gradient-success {
+    background: var(--gradient-success);
+  }
+
+  .bg-gradient-warning {
+    background: var(--gradient-warning);
+  }
+
+  .bg-gradient-danger {
+    background: var(--gradient-danger);
+  }
+}
