@@ -31,12 +31,12 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = useCallback(async (userId: string) => {
+  const fetchProfile = useCallback(async (authUser: User) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
+        .eq('id', authUser.id)
         .single();
 
       if (error && error.code !== 'PGRST116') {
@@ -46,6 +46,34 @@ export function useAuth() {
 
       if (data) {
         setProfile(data as Profile);
+        return;
+      }
+
+      const fallbackName =
+        authUser.user_metadata?.nome ||
+        authUser.user_metadata?.name ||
+        authUser.email?.split('@')[0] ||
+        'Usuário';
+
+      const profilePayload = {
+        id: authUser.id,
+        nome: fallbackName,
+        email: authUser.email ?? '',
+      };
+
+      const { data: insertedProfile, error: insertError } = await supabase
+        .from('profiles')
+        .insert(profilePayload)
+        .select('*')
+        .single();
+
+      if (insertError) {
+        console.error('Error creating missing profile:', insertError);
+        return;
+      }
+
+      if (insertedProfile) {
+        setProfile(insertedProfile as Profile);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -62,7 +90,7 @@ export function useAuth() {
       if (newSession?.user) {
         // Defer profile fetch to avoid blocking
         setTimeout(() => {
-          fetchProfile(newSession.user.id);
+          fetchProfile(newSession.user);
         }, 0);
       } else {
         setProfile(null);
@@ -77,7 +105,7 @@ export function useAuth() {
       setUser(existingSession?.user ?? null);
       
       if (existingSession?.user) {
-        fetchProfile(existingSession.user.id);
+        fetchProfile(existingSession.user);
       }
       
       setLoading(false);
@@ -90,7 +118,7 @@ export function useAuth() {
     try {
       // 1. Create auth user with metadata
       const { data, error } = await supabase.auth.signUp({
-        email: signUpData.email,
+        email: signUpData.email.trim().toLowerCase(),
         password: signUpData.password,
         options: {
           emailRedirectTo: window.location.origin,
@@ -158,7 +186,7 @@ export function useAuth() {
       if (data.session?.user) {
         setSession(data.session);
         setUser(data.session.user);
-        await fetchProfile(data.session.user.id);
+        await fetchProfile(data.session.user);
       }
 
       toast({
