@@ -49,8 +49,9 @@ import {
 const strategicItems = [
   { title: 'Visão Geral', path: '/visao', icon: Eye },
   { title: 'Variáveis', path: '/variaveis', icon: LayoutDashboard },
+  { title: 'Metas e Custos', path: '/planejamento', icon: TrendingUp },
   { title: 'Distribuição', path: '/distribuicao', icon: PieChart },
-  { title: 'Produtos Ref', path: '/produtos', icon: Package },
+  { title: 'Produtos', path: '/produtos', icon: Package },
   { title: 'Custos', path: '/custos', icon: DollarSign },
   { title: 'Compras', path: '/compras', icon: ShoppingCart },
   { title: 'Fluxo Caixa', path: '/fluxo', icon: TrendingUp },
@@ -60,12 +61,10 @@ const strategicItems = [
 ];
 
 const managementItems = [
-  { title: 'Metas e Custos', path: '/planejamento', icon: TrendingUp },
-  { title: 'Estoque e Fluxo', path: '/estoque', icon: Package },
-  { title: 'CRM Clientes', path: '/growth', icon: BarChart3 },
+  { title: 'CRM Clientes', path: '/growth', icon: User },
   { title: 'Vendas (Bling)', path: '/bling-sales', icon: ShoppingBag },
   { title: 'Fichinhas', path: '/fichinhas', icon: Receipt },
-  { title: 'Catálogo Prod', path: '/produtos', icon: Box },
+  { title: 'Estoque e Fluxo', path: '/estoque', icon: Box },
 ];
 
 export function AppSidebar() {
