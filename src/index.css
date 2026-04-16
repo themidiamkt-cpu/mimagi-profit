@@ -10,7 +10,7 @@
 @layer base {
   :root {
     /* Tipografia */
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
     /* tamanhos */
     --text-xs: 11px;

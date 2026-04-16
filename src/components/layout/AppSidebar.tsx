@@ -8,6 +8,7 @@ import {
   BarChart3,
   PlayCircle,
   Store,
+  LayoutGrid,
   Eye,
   LogOut,
   User,
@@ -48,7 +49,7 @@ import {
 
 const strategicItems = [
   { title: 'Visão Geral', path: '/visao', icon: Eye },
-  { title: 'Variáveis', path: '/variaveis', icon: LayoutDashboard },
+  { title: 'Variáveis', path: '/variaveis', icon: LayoutGrid },
   { title: 'Metas e Custos', path: '/planejamento', icon: TrendingUp },
   { title: 'Distribuição', path: '/distribuicao', icon: PieChart },
   { title: 'Produtos', path: '/produtos', icon: Package },
@@ -100,7 +101,7 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/50 uppercase text-xs tracking-wider">
+          <SidebarGroupLabel className="text-sidebar-foreground/30 uppercase text-[11px] font-light tracking-[0.1em] px-3 mb-2">
             Simulador Estratégico
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -124,7 +125,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/50 uppercase text-xs tracking-wider">
+          <SidebarGroupLabel className="text-sidebar-foreground/30 uppercase text-[11px] font-light tracking-[0.1em] px-3 mb-2">
             Operacional e CRM
           </SidebarGroupLabel>
           <SidebarGroupContent>
