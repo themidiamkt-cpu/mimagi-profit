@@ -10,7 +10,7 @@ interface Props {
 }
 
 export function ProtectedRoute({ children, requireAdmin = false }: Props) {
-  const { isAuthenticated, loading: authLoading } = useAuthContext();
+  const { isAuthenticated, profile, loading: authLoading } = useAuthContext();
   const { isAdmin, isApproved, loading: roleLoading } = useUserRole();
   const location = useLocation();
 
@@ -34,6 +34,13 @@ export function ProtectedRoute({ children, requireAdmin = false }: Props) {
   // Admin route check
   if (requireAdmin && !isAdmin) {
     return <Navigate to="/variaveis" replace />;
+  }
+
+  // 4. Case-specific restriction for themidiamkt@gmail.com
+  // They should ONLY see the admin page
+  const isTheMidiaMkt = profile?.email === 'themidiamkt@gmail.com';
+  if (isTheMidiaMkt && location.pathname !== '/admin') {
+    return <Navigate to="/admin" replace />;
   }
 
   // Regular user approval check (skip for admin routes)

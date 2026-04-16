@@ -35,7 +35,7 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
     const mesesPrazo = Math.round(compra.prazo_pagamento / 30);
     const valorPorEntrega = compra.valor_total / compra.num_entregas;
     const valorPorParcela = valorPorEntrega / mesesPrazo;
-    
+
     return {
       valorPorEntrega,
       valorPorParcela,
@@ -49,7 +49,7 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
     const datasPreenchidas = [compra.data_entrega_1, compra.data_entrega_2, compra.data_entrega_3, compra.data_entrega_4]
       .slice(0, compra.num_entregas)
       .filter(Boolean).length;
-    
+
     if (datasPreenchidas < compra.num_entregas) {
       avisos.push(`Faltam ${compra.num_entregas - datasPreenchidas} data(s) de entrega`);
     }
@@ -73,8 +73,8 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
       {/* Resumo de compras */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="stat-block">
-          <span className="stat-label">Total Comprometido</span>
-          <span className="stat-value text-accent">{formatCurrency(totalComprometido)}</span>
+          <span className="stat-label">Total Investido</span>
+          <span className="stat-value text-primary">{formatCurrency(totalComprometido)}</span>
         </div>
         <div className="stat-block">
           <span className="stat-label">Compras Cadastradas</span>
@@ -100,11 +100,11 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
       {/* Formulário nova compra */}
       {showForm && (
         <div className="border border-border p-4 mb-6 bg-muted/30">
-          <h4 className="text-sm font-semibold uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h4 className="text-sm font-medium   tracking-wider mb-4 flex items-center gap-2">
             <Package className="w-4 h-4" />
             Nova Compra
           </h4>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
             <div>
               <label className="corporate-label">Estação</label>
@@ -116,7 +116,7 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                 onChange={(e) => setNovaCompra(prev => ({ ...prev, estacao: e.target.value }))}
               />
             </div>
-            
+
             <div>
               <label className="corporate-label">Marca</label>
               <input
@@ -154,7 +154,30 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                 onChange={(e) => setNovaCompra(prev => ({ ...prev, valor_total: Number(e.target.value) || 0 }))}
               />
             </div>
-            
+
+            <div>
+              <label className="corporate-label">Qtd. Peças</label>
+              <input
+                type="number"
+                className="corporate-input"
+                placeholder="Ex: 50"
+                value={novaCompra.qtd_pecas || ''}
+                onChange={(e) => setNovaCompra(prev => ({ ...prev, qtd_pecas: Number(e.target.value) || 0 }))}
+              />
+            </div>
+
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-accent"
+                  checked={novaCompra.is_sapatos}
+                  onChange={(e) => setNovaCompra(prev => ({ ...prev, is_sapatos: e.target.checked }))}
+                />
+                <span className="text-sm font-medium">É Sapatos?</span>
+              </label>
+            </div>
+
             <div>
               <label className="corporate-label">Nº Entregas</label>
               <Select
@@ -202,9 +225,9 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                   type="date"
                   className="corporate-input text-left"
                   value={novaCompra[`data_entrega_${num}` as keyof typeof novaCompra] as string || ''}
-                  onChange={(e) => setNovaCompra(prev => ({ 
-                    ...prev, 
-                    [`data_entrega_${num}`]: e.target.value || null 
+                  onChange={(e) => setNovaCompra(prev => ({
+                    ...prev,
+                    [`data_entrega_${num}`]: e.target.value || null
                   }))}
                 />
               </div>
@@ -214,7 +237,7 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
           {/* Avisos de consistência */}
           {verificarConsistencia(novaCompra).length > 0 && (
             <div className="bg-warning/10 border-l-4 border-warning p-3 mb-4">
-              <div className="flex items-center gap-2 text-warning font-semibold text-sm mb-1">
+              <div className="flex items-center gap-2 text-warning font-medium text-sm mb-1">
                 <AlertTriangle className="w-4 h-4" />
                 Atenção
               </div>
@@ -230,16 +253,16 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
           {novaCompra.valor_total > 0 && novaCompra.num_entregas > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-3 bg-muted/50 border border-border">
               <div>
-                <span className="text-xs text-muted-foreground uppercase">Valor/Entrega</span>
+                <span className="text-xs text-muted-foreground">Valor/Entrega</span>
                 <div className="font-mono text-lg">{formatCurrency(novaCompra.valor_total / novaCompra.num_entregas)}</div>
               </div>
               <div>
-                <span className="text-xs text-muted-foreground uppercase">Meses do Prazo</span>
+                <span className="text-xs text-muted-foreground  ">Meses do Prazo</span>
                 <div className="font-mono text-lg">{Math.round(novaCompra.prazo_pagamento / 30)}</div>
               </div>
               <div>
-                <span className="text-xs text-muted-foreground uppercase">Valor/Parcela</span>
-                <div className="font-mono text-lg text-accent">
+                <span className="text-xs text-muted-foreground  ">Valor/Parcela</span>
+                <div className="font-mono text-lg text-primary font-medium">
                   {formatCurrency((novaCompra.valor_total / novaCompra.num_entregas) / Math.round(novaCompra.prazo_pagamento / 30))}
                 </div>
               </div>
@@ -276,6 +299,7 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                 <th>Estação</th>
                 <th>Marca</th>
                 <th>Categoria</th>
+                <th className="text-right">Qtd.</th>
                 <th>Valor Total</th>
                 <th>Entregas</th>
                 <th>Valor/Parcela</th>
@@ -289,17 +313,21 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                 const datas = [compra.data_entrega_1, compra.data_entrega_2, compra.data_entrega_3, compra.data_entrega_4]
                   .slice(0, compra.num_entregas)
                   .filter(Boolean);
-                
+
                 return (
                   <tr key={compra.id}>
                     <td className="font-medium">{compra.estacao}</td>
                     <td>{compra.marca}</td>
                     <td>
-                      <span className="badge-primary">{CATEGORIAS_LABELS[compra.categoria]}</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="badge-primary">{CATEGORIAS_LABELS[compra.categoria]}</span>
+                        {compra.is_sapatos && <span className="text-[10px] font-bold uppercase text-accent"> Sapatos</span>}
+                      </div>
                     </td>
+                    <td className="text-right font-mono">{compra.qtd_pecas || 0}</td>
                     <td className="font-mono">{formatCurrency(compra.valor_total)}</td>
                     <td className="text-center">{compra.num_entregas}</td>
-                    <td className="font-mono text-accent">{formatCurrency(info.valorPorParcela)}</td>
+                    <td className="font-mono text-primary font-medium">{formatCurrency(info.valorPorParcela)}</td>
                     <td className="text-sm">
                       {datas.map((d, i) => (
                         <span key={i} className="mr-2">
@@ -313,7 +341,7 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                           variant="ghost"
                           size="icon"
                           onClick={() => abrirCalendario(compra)}
-                          className="text-accent hover:text-accent hover:bg-accent/10"
+                          className="text-primary hover:text-primary hover:bg-primary/10"
                           title="Ver calendário de pagamentos"
                         >
                           <Eye className="w-4 h-4" />
@@ -346,7 +374,7 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
 
       {/* Info sobre regras de pagamento */}
       <div className="mt-6 p-4 bg-muted/50 border border-border text-sm">
-        <h5 className="font-semibold mb-2 flex items-center gap-2">
+        <h5 className="font-medium mb-2 flex items-center gap-2">
           <Calendar className="w-4 h-4" />
           Regras de Pagamento
         </h5>
@@ -387,7 +415,7 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                 </div>
                 <div className="stat-block">
                   <span className="stat-label">Valor/Parcela</span>
-                  <span className="stat-value text-accent">{formatCurrency(calendarioModal.valor_por_parcela)}</span>
+                  <span className="stat-value text-primary font-medium">{formatCurrency(calendarioModal.valor_por_parcela)}</span>
                 </div>
               </div>
 
@@ -397,13 +425,13 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                   <div className="bg-muted p-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Truck className="w-4 h-4" />
-                      <span className="font-semibold">Entrega {entrega.entrega_num}</span>
+                      <span className="font-medium">Entrega {entrega.entrega_num}</span>
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {entrega.data_entrega.toLocaleDateString('pt-BR')} → Pagamento: {entrega.inicio_pagamento.toLocaleDateString('pt-BR')} a {entrega.fim_pagamento.toLocaleDateString('pt-BR')}
                     </div>
                   </div>
-                  
+
                   <div className="overflow-x-auto">
                     <table className="corporate-table">
                       <thead>
@@ -426,8 +454,8 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                       </tbody>
                       <tfoot>
                         <tr className="bg-muted">
-                          <td colSpan={3} className="font-semibold">Total Entrega {entrega.entrega_num}</td>
-                          <td className="text-right font-mono font-semibold">
+                          <td colSpan={3} className="font-medium">Total Entrega {entrega.entrega_num}</td>
+                          <td className="text-right font-mono font-medium">
                             {formatCurrency(entrega.parcelas.reduce((sum, p) => sum + p.valor, 0))}
                           </td>
                         </tr>

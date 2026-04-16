@@ -41,7 +41,7 @@ export default function Login() {
               <ShoppingBag className="w-8 h-8 text-accent" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">MIMAGI Profit Planner</CardTitle>
+          <CardTitle className="text-2xl font-medium">MIMAGI Profit Planner</CardTitle>
           <CardDescription>Entre na sua conta para acessar seu planejamento</CardDescription>
         </CardHeader>
         

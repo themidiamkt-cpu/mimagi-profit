@@ -15,6 +15,8 @@ export interface Compra {
   data_entrega_2: string | null;
   data_entrega_3: string | null;
   data_entrega_4: string | null;
+  is_sapatos: boolean;
+  qtd_pecas: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -80,10 +82,9 @@ export const defaultCompra: Omit<Compra, 'id'> = {
   valor_total: 0,
   prazo_pagamento: 180,
   num_entregas: 1,
-  data_entrega_1: null,
-  data_entrega_2: null,
-  data_entrega_3: null,
   data_entrega_4: null,
+  is_sapatos: false,
+  qtd_pecas: 0,
 };
 
 export const CATEGORIAS_LABELS: Record<CategoriaCompra, string> = {

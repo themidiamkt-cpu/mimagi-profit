@@ -19,7 +19,7 @@ export function VisaoDiretoria({ resumo, totalComprometido }: Props) {
         <div className="metric-card">
           <div className="metric-card-header flex items-center gap-2">
             <Calendar className="w-4 h-4" />
-            Mês de Maior Comprometimento
+            Mês de Maior Investimento
           </div>
           <div className="metric-card-value text-xl">
             {resumo.mes_maior_comprometimento}
@@ -49,7 +49,7 @@ export function VisaoDiretoria({ resumo, totalComprometido }: Props) {
         <div className="metric-card">
           <div className="metric-card-header bg-gradient-accent flex items-center gap-2">
             <DollarSign className="w-4 h-4" />
-            Total Comprometido
+            Total Investido
           </div>
           <div className="metric-card-value">
             {formatCurrency(totalComprometido)}
@@ -66,21 +66,21 @@ export function VisaoDiretoria({ resumo, totalComprometido }: Props) {
             ) : (
               <XCircle className="w-5 h-5 text-destructive" />
             )}
-            <span className="font-semibold">Cobertura de Caixa</span>
+            <span className="font-medium">Cobertura de Caixa</span>
           </div>
           <div className="grid grid-cols-2 gap-4 mt-3">
             <div>
-              <span className="text-xs text-muted-foreground uppercase">Fat. Planejado</span>
+              <span className="text-xs text-muted-foreground  ">Fat. Planejado</span>
               <p className="font-mono text-lg">{formatCurrency(resumo.faturamento_planejado)}</p>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground uppercase">Caixa Necessário (Média)</span>
+              <span className="text-xs text-muted-foreground  ">Caixa Necessário (Média)</span>
               <p className="font-mono text-lg">{formatCurrency(resumo.caixa_necessario_medio)}</p>
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-border">
-            <span className="text-xs text-muted-foreground uppercase">Diferença</span>
-            <p className={`font-mono text-xl font-bold ${coberturaOk ? 'text-success' : 'text-destructive'}`}>
+            <span className="text-xs text-muted-foreground  ">Diferença</span>
+            <p className={`font-mono text-xl font-medium ${coberturaOk ? 'text-success' : 'text-destructive'}`}>
               {coberturaOk ? '+' : ''}{formatCurrency(diferencaCaixa)}
             </p>
           </div>
@@ -88,7 +88,7 @@ export function VisaoDiretoria({ resumo, totalComprometido }: Props) {
 
         {/* Meses críticos */}
         <div className="p-4 border border-border">
-          <h4 className="font-semibold mb-3 flex items-center gap-2">
+          <h4 className="font-medium mb-3 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-warning" />
             Meses Críticos
           </h4>
@@ -112,7 +112,7 @@ export function VisaoDiretoria({ resumo, totalComprometido }: Props) {
       {/* Alertas */}
       {resumo.alertas.length > 0 && (
         <div className="space-y-2">
-          <h4 className="font-semibold flex items-center gap-2">
+          <h4 className="font-medium flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-warning" />
             Alertas Automáticos
           </h4>
@@ -126,20 +126,20 @@ export function VisaoDiretoria({ resumo, totalComprometido }: Props) {
 
       {/* Indicadores de decisão */}
       <div className="mt-6 p-4 bg-muted/50 border border-border">
-        <h4 className="font-semibold mb-3">Indicadores de Decisão</h4>
+        <h4 className="font-medium mb-3">Indicadores de Decisão</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div>
-            <span className="text-muted-foreground">Quanto já está comprometido:</span>
-            <p className="font-mono font-semibold text-lg">{formatCurrency(totalComprometido)}</p>
+            <span className="text-foreground font-medium">Quanto já está investido:</span>
+            <p className="font-mono font-medium text-lg">{formatCurrency(totalComprometido)}</p>
           </div>
           <div>
-            <span className="text-muted-foreground">Pico de caixa:</span>
-            <p className="font-mono font-semibold text-lg">{resumo.mes_maior_comprometimento}</p>
-            <p className="font-mono text-accent">{formatCurrency(resumo.valor_maximo_saida)}</p>
+            <span className="text-foreground font-medium">Pico de investimento (saída):</span>
+            <p className="font-mono font-medium text-lg">{resumo.mes_maior_comprometimento}</p>
+            <p className="font-mono text-primary font-medium">{formatCurrency(resumo.valor_maximo_saida)}</p>
           </div>
           <div>
-            <span className="text-muted-foreground">Para sustentar crescimento:</span>
-            <p className="font-mono font-semibold text-lg">{formatCurrency(resumo.caixa_necessario_medio)}/mês</p>
+            <span className="text-foreground font-medium">Para sustentar crescimento:</span>
+            <p className="font-mono font-medium text-lg">{formatCurrency(resumo.caixa_necessario_medio)}/mês</p>
           </div>
         </div>
       </div>

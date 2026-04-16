@@ -13,14 +13,14 @@ export function PontoEquilibrio({ calculated }: Props) {
       <div className="bg-muted/50 border border-border p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="text-center">
-            <p className="text-sm text-muted-foreground uppercase tracking-wider mb-2">Faturamento Mínimo Mensal</p>
-            <p className="text-4xl font-bold font-mono text-accent">{formatCurrency(calculated.faturamento_minimo_mensal)}</p>
-            <p className="text-sm text-muted-foreground mt-2">para cobrir todos os custos fixos</p>
+            <p className="text-sm text-foreground font-medium   tracking-wider mb-2">Faturamento Mínimo Mensal</p>
+            <p className="text-4xl font-medium font-mono text-primary">{formatCurrency(calculated.faturamento_minimo_mensal)}</p>
+            <p className="text-sm text-foreground font-medium mt-2">para cobrir todos os custos fixos</p>
           </div>
           <div className="text-center">
-            <p className="text-sm text-muted-foreground uppercase tracking-wider mb-2">Quantidade Mínima de Peças</p>
-            <p className="text-4xl font-bold font-mono text-primary">{formatNumber(calculated.pecas_minimas_mensal)}</p>
-            <p className="text-sm text-muted-foreground mt-2">vendas por mês</p>
+            <p className="text-sm text-foreground font-medium   tracking-wider mb-2">Quantidade Mínima de Peças</p>
+            <p className="text-4xl font-medium font-mono text-primary">{formatNumber(calculated.pecas_minimas_mensal)}</p>
+            <p className="text-sm text-foreground font-medium mt-2">vendas por mês</p>
           </div>
         </div>
 
@@ -28,7 +28,7 @@ export function PontoEquilibrio({ calculated }: Props) {
           <p className="text-center text-foreground">
             <strong>Você precisa faturar {formatCurrency(calculated.faturamento_minimo_mensal)}/mês para não ter prejuízo.</strong>
           </p>
-          <p className="text-center text-sm text-muted-foreground mt-1">
+          <p className="text-center text-sm text-foreground font-medium mt-1">
             Isso equivale a aproximadamente {formatNumber(calculated.pecas_minimas_mensal)} peças vendidas por mês.
           </p>
         </div>

@@ -86,7 +86,7 @@ export function useAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      
+
       if (newSession?.user) {
         // Defer profile fetch to avoid blocking
         setTimeout(() => {
@@ -95,7 +95,7 @@ export function useAuth() {
       } else {
         setProfile(null);
       }
-      
+
       setLoading(false);
     });
 
@@ -103,11 +103,11 @@ export function useAuth() {
     supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
       setSession(existingSession);
       setUser(existingSession?.user ?? null);
-      
+
       if (existingSession?.user) {
         fetchProfile(existingSession.user);
       }
-      
+
       setLoading(false);
     });
 
@@ -124,6 +124,10 @@ export function useAuth() {
           emailRedirectTo: window.location.origin,
           data: {
             nome: signUpData.nome,
+            whatsapp: signUpData.whatsapp,
+            nome_loja: signUpData.nome_loja,
+            instagram_loja: signUpData.instagram_loja,
+            faturamento_atual: signUpData.faturamento_atual,
           },
         },
       });
@@ -131,25 +135,9 @@ export function useAuth() {
       if (error) throw error;
 
       if (data.user) {
-        // 2. Update profile with additional data
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            nome: signUpData.nome,
-            whatsapp: signUpData.whatsapp,
-            nome_loja: signUpData.nome_loja,
-            instagram_loja: signUpData.instagram_loja,
-            faturamento_atual: signUpData.faturamento_atual,
-          })
-          .eq('id', data.user.id);
-
-        if (profileError) {
-          console.error('Error updating profile:', profileError);
-        }
-
         toast({
           title: 'Conta criada com sucesso!',
-          description: 'Bem-vindo ao MIMAGI Profit Planner.',
+          description: 'Verifique seu e-mail para confirmar seu cadastro e aguarde a aprovação.',
         });
 
         return { success: true };
@@ -158,12 +146,12 @@ export function useAuth() {
       return { success: false, error: 'Erro desconhecido ao criar conta' };
     } catch (error: any) {
       console.error('SignUp error:', error);
-      
+
       let message = 'Não foi possível criar a conta.';
       if (error.message?.includes('already registered')) {
         message = 'Este email já está cadastrado.';
       }
-      
+
       toast({
         title: 'Erro ao criar conta',
         description: message,
@@ -197,7 +185,7 @@ export function useAuth() {
       return { success: true };
     } catch (error: any) {
       console.error('SignIn error:', error);
-      
+
       let message = 'Não foi possível fazer login.';
       if (error.message?.includes('Invalid login credentials')) {
         message = 'Email ou senha incorretos.';
@@ -219,11 +207,11 @@ export function useAuth() {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      
+
       setUser(null);
       setSession(null);
       setProfile(null);
-      
+
       toast({
         title: 'Logout realizado',
         description: 'Até logo!',
@@ -254,7 +242,7 @@ export function useAuth() {
       return { success: true };
     } catch (error: any) {
       console.error('Update profile error:', error);
-      
+
       toast({
         title: 'Erro ao atualizar perfil',
         description: 'Não foi possível atualizar suas informações.',

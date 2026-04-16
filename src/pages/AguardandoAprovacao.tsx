@@ -38,10 +38,23 @@ export default function AguardandoAprovacao() {
               <Clock className="w-10 h-10 text-amber-600 dark:text-amber-400" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Aguardando Aprovação</CardTitle>
+          <CardTitle className="text-2xl font-medium">Aguardando Aprovação</CardTitle>
           <CardDescription className="text-base mt-2">
             Olá, {profile?.nome || 'Usuário'}! Seu cadastro foi recebido com sucesso.
           </CardDescription>
+
+          <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-lg text-left">
+            <p className="text-sm font-medium text-primary flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              Verifique seu e-mail
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Enviamos um link de confirmação para o seu e-mail. Você precisa confirmar sua conta antes que o administrador possa aprová-la.
+            </p>
+          </div>
         </CardHeader>
         
         <CardContent className="space-y-4">

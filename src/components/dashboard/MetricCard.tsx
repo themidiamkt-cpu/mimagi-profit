@@ -10,11 +10,11 @@ interface MetricCardProps {
 
 export function MetricCard({ title, value, subtitle, variant = 'default', icon }: MetricCardProps) {
   const headerStyles = {
-    default: 'bg-gradient-primary',
-    primary: 'bg-gradient-primary',
-    accent: 'bg-gradient-accent',
-    success: 'bg-gradient-success',
-    warning: 'bg-gradient-warning',
+    default: 'bg-primary-subtle',
+    primary: 'bg-primary-subtle',
+    accent: 'bg-accent-subtle',
+    success: 'bg-success-subtle',
+    warning: 'bg-warning-subtle',
   };
 
   return (

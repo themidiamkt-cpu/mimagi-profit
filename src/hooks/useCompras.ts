@@ -4,9 +4,9 @@ import { Compra, CategoriaCompra, ParcelaCalculada, FluxoCaixaMensal, ResumoExec
 import { toast } from '@/hooks/use-toast';
 
 export function useCompras(
-  planejamentoId: string | null, 
-  custoFixoMensal: number, 
-  margem: number, 
+  planejamentoId: string | null,
+  custoFixoMensal: number,
+  margem: number,
   faturamentoMensal: number,
   userId: string | null
 ) {
@@ -25,7 +25,7 @@ export function useCompras(
 
   const loadCompras = async () => {
     if (!planejamentoId || !userId) return;
-    
+
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -51,6 +51,8 @@ export function useCompras(
           data_entrega_2: c.data_entrega_2,
           data_entrega_3: c.data_entrega_3,
           data_entrega_4: c.data_entrega_4,
+          is_sapatos: !!c.is_sapatos,
+          qtd_pecas: Number(c.qtd_pecas) || 0,
           created_at: c.created_at,
           updated_at: c.updated_at,
         })));
@@ -69,8 +71,11 @@ export function useCompras(
 
   // Adicionar compra
   const addCompra = useCallback(async (compra: Omit<Compra, 'id'>) => {
-    if (!planejamentoId || !userId) return;
-    
+    if (!planejamentoId || !userId) {
+      console.warn('PlanejamentoId ou UserId ausente para adicionar compra');
+      return;
+    }
+
     try {
       setSaving(true);
       const { data, error } = await supabase
@@ -99,6 +104,8 @@ export function useCompras(
           data_entrega_2: data.data_entrega_2,
           data_entrega_3: data.data_entrega_3,
           data_entrega_4: data.data_entrega_4,
+          is_sapatos: !!data.is_sapatos,
+          qtd_pecas: Number(data.qtd_pecas) || 0,
           created_at: data.created_at,
           updated_at: data.updated_at,
         };
@@ -108,50 +115,54 @@ export function useCompras(
           description: 'A compra foi registrada com sucesso.',
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao adicionar compra:', error);
       toast({
         title: 'Erro ao adicionar',
-        description: 'Não foi possível registrar a compra.',
+        description: error.message || 'Não foi possível registrar a compra.',
         variant: 'destructive',
       });
     } finally {
       setSaving(false);
     }
-  }, [planejamentoId]);
+  }, [planejamentoId, userId]);
 
   // Atualizar compra
   const updateCompra = useCallback(async (id: string, updates: Partial<Compra>) => {
+    if (!userId) return;
     try {
       setSaving(true);
       const { error } = await supabase
         .from('compras')
         .update(updates)
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', userId);
 
       if (error) throw error;
 
       setCompras(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao atualizar compra:', error);
       toast({
         title: 'Erro ao atualizar',
-        description: 'Não foi possível atualizar a compra.',
+        description: error.message || 'Não foi possível atualizar a compra.',
         variant: 'destructive',
       });
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [userId]);
 
   // Remover compra
   const removeCompra = useCallback(async (id: string) => {
+    if (!userId) return;
     try {
       setSaving(true);
       const { error } = await supabase
         .from('compras')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', userId);
 
       if (error) throw error;
 
@@ -160,17 +171,17 @@ export function useCompras(
         title: 'Compra removida',
         description: 'A compra foi removida com sucesso.',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao remover compra:', error);
       toast({
         title: 'Erro ao remover',
-        description: 'Não foi possível remover a compra.',
+        description: error.message || 'Não foi possível remover a compra.',
         variant: 'destructive',
       });
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [userId]);
 
   // Calcular número de meses do prazo
   const calcularMesesPrazo = (prazoDias: number): number => {
@@ -192,11 +203,11 @@ export function useCompras(
 
     entregas.forEach((dataEntrega, entregaIndex) => {
       const dataBase = new Date(dataEntrega + 'T00:00:00');
-      
+
       // Início do pagamento = entrega + 30 dias
       const inicioPagamento = new Date(dataBase);
       inicioPagamento.setDate(inicioPagamento.getDate() + 30);
-      
+
       // Fim do pagamento = início + prazo
       const fimPagamento = new Date(inicioPagamento);
       fimPagamento.setDate(fimPagamento.getDate() + compra.prazo_pagamento);
@@ -206,7 +217,7 @@ export function useCompras(
       // Se cair após dia 15 → parcela entra no dia 01 do mês seguinte
       let mesAtual = new Date(inicioPagamento);
       let dataReferenciaPrimeira: '01' | '15';
-      
+
       if (inicioPagamento.getDate() <= 15) {
         dataReferenciaPrimeira = '15';
         mesAtual.setDate(15);
@@ -219,12 +230,12 @@ export function useCompras(
       // Gerar MESES_PRAZO parcelas mensais
       for (let i = 0; i < mesesPrazo; i++) {
         const competenciaMes = `${mesAtual.getFullYear()}-${String(mesAtual.getMonth() + 1).padStart(2, '0')}`;
-        
+
         // Alternar entre 01 e 15 mensalmente
-        const dataReferencia: '01' | '15' = i === 0 
-          ? dataReferenciaPrimeira 
+        const dataReferencia: '01' | '15' = i === 0
+          ? dataReferenciaPrimeira
           : (i % 2 === 0 ? dataReferenciaPrimeira : (dataReferenciaPrimeira === '01' ? '15' : '01'));
-        
+
         parcelas.push({
           compra_id: compra.id,
           marca: compra.marca,
@@ -288,9 +299,9 @@ export function useCompras(
   };
 
   // Calcular fluxo de caixa mensal
-  const calcularFluxoCaixa = (): FluxoCaixaMensal[] => {
+  const calcularFluxoCaixa = useCallback((): FluxoCaixaMensal[] => {
     const fluxo: Map<string, FluxoCaixaMensal> = new Map();
-    
+
     // Gerar meses de 2025 a 2027 (3 anos)
     const meses: string[] = [];
     for (let ano = 2025; ano <= 2027; ano++) {
@@ -304,7 +315,7 @@ export function useCompras(
       const [ano, mesNum] = mes.split('-').map(Number);
       const data = new Date(ano, mesNum - 1, 1);
       const mesDisplay = data.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-      
+
       fluxo.set(mes, {
         mes,
         mes_display: mesDisplay.charAt(0).toUpperCase() + mesDisplay.slice(1),
@@ -317,28 +328,30 @@ export function useCompras(
     });
 
     // Somar parcelas por mês
-    compras.forEach(compra => {
-      const parcelas = calcularParcelas(compra);
-      parcelas.forEach(parcela => {
-        const mesData = fluxo.get(parcela.competencia_mes);
-        if (mesData) {
-          mesData.custo_compras += parcela.valor;
-          mesData.total_saidas = mesData.custo_compras + mesData.custos_fixos;
-        }
+    if (Array.isArray(compras)) {
+      compras.forEach(compra => {
+        const parcelas = calcularParcelas(compra);
+        parcelas.forEach(parcela => {
+          const mesData = fluxo.get(parcela.competencia_mes);
+          if (mesData) {
+            mesData.custo_compras += parcela.valor;
+            mesData.total_saidas = mesData.custo_compras + mesData.custos_fixos;
+          }
+        });
       });
-    });
+    }
 
     // Calcular faturamento necessário e status
     const margemContribuicao = margem > 0 ? (margem - 1) / margem : 0;
-    
+
     fluxo.forEach((mesData) => {
-      mesData.faturamento_necessario = margemContribuicao > 0 
-        ? mesData.total_saidas / margemContribuicao 
+      mesData.faturamento_necessario = margemContribuicao > 0
+        ? mesData.total_saidas / margemContribuicao
         : 0;
-      
+
       // Status baseado na comparação com faturamento planejado
       const ratio = faturamentoMensal > 0 ? mesData.faturamento_necessario / faturamentoMensal : 0;
-      
+
       if (ratio <= 0.8) {
         mesData.status = 'verde';
       } else if (ratio <= 1.0) {
@@ -349,15 +362,15 @@ export function useCompras(
     });
 
     return Array.from(fluxo.values());
-  };
+  }, [compras, custoFixoMensal, margem, faturamentoMensal]);
 
   // Calcular resumo executivo
-  const calcularResumoExecutivo = (): ResumoExecutivo => {
+  const calcularResumoExecutivo = useCallback((): ResumoExecutivo => {
     const fluxo = calcularFluxoCaixa();
-    
+
     // Filtrar apenas meses com compras
     const mesesComCompras = fluxo.filter(m => m.custo_compras > 0);
-    
+
     if (mesesComCompras.length === 0) {
       return {
         mes_maior_comprometimento: '-',
@@ -370,8 +383,9 @@ export function useCompras(
     }
 
     // Encontrar mês de maior saída
-    const mesMaiorSaida = mesesComCompras.reduce((prev, curr) => 
-      curr.total_saidas > prev.total_saidas ? curr : prev
+    const mesMaiorSaida = mesesComCompras.reduce((prev, curr) =>
+      curr.total_saidas > prev.total_saidas ? curr : prev,
+      mesesComCompras[0]
     );
 
     // Identificar meses críticos (vermelho)
@@ -384,16 +398,16 @@ export function useCompras(
 
     // Gerar alertas
     const alertas: string[] = [];
-    
+
     if (mesesCriticos.length > 0) {
       alertas.push(`${mesesCriticos.length} mês(es) crítico(s) identificado(s)`);
     }
-    
+
     if (mesMaiorSaida.total_saidas > faturamentoMensal) {
       alertas.push('Pico de caixa supera o faturamento planejado');
     }
 
-    const totalCompras = compras.reduce((sum, c) => sum + c.valor_total, 0);
+    const totalCompras = Array.isArray(compras) ? compras.reduce((sum, c) => sum + Number(c.valor_total || 0), 0) : 0;
     if (totalCompras > faturamentoMensal * 6) {
       alertas.push('Volume de compras pode gerar risco de caixa');
     }
@@ -406,7 +420,7 @@ export function useCompras(
       meses_criticos: mesesCriticos,
       alertas,
     };
-  };
+  }, [calcularFluxoCaixa, faturamentoMensal, custoFixoMensal, compras]);
 
   // Calcular custo real mensal (para usar em outros componentes)
   const getCustoRealMensal = (mes: string): number => {
@@ -416,9 +430,10 @@ export function useCompras(
   };
 
   // Obter total comprometido
-  const getTotalComprometido = (): number => {
-    return compras.reduce((sum, c) => sum + c.valor_total, 0);
-  };
+  const getTotalComprometido = useCallback((): number => {
+    if (!Array.isArray(compras)) return 0;
+    return compras.reduce((sum, c) => sum + Number(c.valor_total || 0), 0);
+  }, [compras]);
 
   return {
     compras,

@@ -5,7 +5,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CheckCircle, XCircle, Users, LogOut, Shield } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Users, LogOut, Shield, Database, Smartphone } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,6 +18,7 @@ interface PendingUser {
   whatsapp: string | null;
   faturamento_atual: number | null;
   created_at: string;
+  is_bling?: boolean;
 }
 
 export default function Admin() {
@@ -43,49 +44,65 @@ export default function Admin() {
 
   const fetchUsers = async () => {
     try {
-      // Fetch pending users
-      const { data: pendingRoles, error: pendingError } = await supabase
+      // 1. Fetch ALL roles first (simpler than doing multiple restricted queries)
+      const { data: allRoles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id')
-        .eq('role', 'pending');
+        .select('*');
 
-      if (pendingError) throw pendingError;
+      if (rolesError) throw rolesError;
 
-      const pendingUserIds = pendingRoles?.map(r => r.user_id) || [];
+      // 2. Fetch ALL profiles
+      const { data: allProfiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*');
 
-      if (pendingUserIds.length > 0) {
-        const { data: pendingProfiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', pendingUserIds);
+      if (profilesError) throw profilesError;
 
-        if (profilesError) throw profilesError;
-        setPendingUsers(pendingProfiles || []);
-      } else {
-        setPendingUsers([]);
+      // 3. Fetch Bling configs
+      const { data: allBlingConfigs, error: blingError } = await supabase
+        .from('bling_config')
+        .select('user_id, api_key, access_token');
+
+      if (blingError) {
+        console.warn('Error fetching bling configs:', blingError);
       }
 
-      // Fetch approved users
-      const { data: approvedRoles, error: approvedError } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'user');
+      // 4. Join logic
+      const profileMap = new Map(allProfiles?.map(p => [p.id, p]) || []);
+      const blingMap = new Map((allBlingConfigs || [])
+        .map(b => [b.user_id, !!(b.api_key || b.access_token)]));
 
-      if (approvedError) throw approvedError;
+      const processedUsers: PendingUser[] = (allRoles || []).map(roleRecord => {
+        const profile = profileMap.get(roleRecord.user_id);
+        return {
+          id: roleRecord.user_id,
+          nome: profile?.nome || 'Usuário sem nome',
+          email: profile?.email || 'E-mail não vinculado',
+          nome_loja: profile?.nome_loja || null,
+          instagram_loja: profile?.instagram_loja || null,
+          whatsapp: profile?.whatsapp || null,
+          faturamento_atual: profile?.faturamento_atual || null,
+          created_at: roleRecord.created_at || profile?.created_at || new Date().toISOString(),
+          is_bling: blingMap.get(roleRecord.user_id) || false
+        };
+      });
 
-      const approvedUserIds = approvedRoles?.map(r => r.user_id) || [];
+      // 4. Categorize
+      // Pending: role is 'pending'
+      const pending = (allRoles || [])
+        .filter(r => r.role === 'pending')
+        .map(r => processedUsers.find(u => u.id === r.user_id))
+        .filter(Boolean) as PendingUser[];
 
-      if (approvedUserIds.length > 0) {
-        const { data: approvedProfiles, error: approvedProfilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', approvedUserIds);
+      // Approved: role is 'user' OR 'admin'
+      const approved = (allRoles || [])
+        .filter(r => r.role === 'user' || r.role === 'admin')
+        .map(r => processedUsers.find(u => u.id === r.user_id))
+        .filter(Boolean) as PendingUser[];
 
-        if (approvedProfilesError) throw approvedProfilesError;
-        setApprovedUsers(approvedProfiles || []);
-      } else {
-        setApprovedUsers([]);
-      }
+      setPendingUsers(pending);
+      setApprovedUsers(approved);
+
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -200,7 +217,7 @@ export default function Admin() {
               <Shield className="w-6 h-6 text-accent" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Painel Admin</h1>
+              <h1 className="text-2xl font-medium">Painel Admin</h1>
               <p className="text-muted-foreground text-sm">Gerenciar aprovações de usuários</p>
             </div>
           </div>
@@ -208,6 +225,49 @@ export default function Admin() {
             <LogOut className="w-4 h-4 mr-2" />
             Sair
           </Button>
+        </div>
+
+        {/* Summary Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total de Usuários</p>
+                  <p className="text-2xl font-bold">{pendingUsers.length + approvedUsers.length}</p>
+                </div>
+                <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 text-accent" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Ativos / Aprovados</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">{approvedUsers.length}</p>
+                </div>
+                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Aguardando</p>
+                  <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingUsers.length}</p>
+                </div>
+                <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Pending Users */}
@@ -234,10 +294,19 @@ export default function Admin() {
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold">{user.nome}</h3>
+                        <h3 className="font-medium">{user.nome}</h3>
                         <Badge variant="outline" className="text-xs">
                           {user.nome_loja || 'Sem loja'}
                         </Badge>
+                        {user.is_bling ? (
+                          <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 gap-1 border-blue-200">
+                            <Database className="w-3 h-3" /> Bling
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 gap-1 border-slate-200">
+                            <Smartphone className="w-3 h-3" /> Planilha
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-sm text-muted-foreground space-y-0.5">
                         <p>📧 {user.email}</p>
@@ -295,19 +364,33 @@ export default function Admin() {
                 Nenhum usuário aprovado ainda
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {approvedUsers.map((user) => (
                   <div
                     key={user.id}
-                    className="border rounded-lg p-3 flex items-center justify-between"
+                    className="border rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
                   >
-                    <div>
-                      <p className="font-medium">{user.nome}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {user.nome_loja} • {user.email}
-                      </p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-medium">{user.nome}</h3>
+                        <Badge variant="outline" className="text-xs">
+                          {user.nome_loja || 'Sem loja'}
+                        </Badge>
+                        {user.is_bling ? (
+                          <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 gap-1 border-blue-200">
+                            <Database className="w-3 h-3" /> Bling
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 gap-1 border-slate-200">
+                            <Smartphone className="w-3 h-3" /> Planilha
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {user.email} • {user.whatsapp || 'Sem Whats'}
+                      </div>
                     </div>
-                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 w-fit">
                       Ativo
                     </Badge>
                   </div>

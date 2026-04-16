@@ -24,7 +24,7 @@ function MarcaBlock({ title, marcas, investimentoBase, faturamentoBase, updateFi
 
   return (
     <div className="border border-border p-4 mb-4">
-      <h4 className="font-semibold text-sm uppercase tracking-wide mb-4 text-foreground">{title}</h4>
+      <h4 className="font-medium text-sm   tracking-wide mb-4 text-foreground">{title}</h4>
       
       {!isValid && (
         <div className="alert-warning mb-3">

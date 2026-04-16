@@ -1,0 +1,3 @@
+- [ ] Adicionar campos para Client ID e Client Secret na Interface
+- [ ] Implementar persistência dos dados de configuração no banco
+- [ ] Atualizar Edge Function bling-token para usar credenciais dinâmicas

@@ -29,13 +29,13 @@ export function AcompanhamentoMeta({ data, calculated, updateField }: Props) {
             prefix="R$"
           />
         </div>
-        
+
         <MetricCard
           title="Meta Mensal Planejada"
           value={formatCurrency(metaMensal)}
           variant="default"
         />
-        
+
         <MetricCard
           title="% da Meta Atingida"
           value={formatPercent(percentAtingido)}
@@ -51,11 +51,11 @@ export function AcompanhamentoMeta({ data, calculated, updateField }: Props) {
             ) : (
               <TrendingDown className="w-5 h-5 text-amber-500" />
             )}
-            <span className="text-sm font-medium text-muted-foreground">
+            <span className="text-sm font-medium text-foreground">
               {atingiuMeta ? 'Meta Atingida!' : 'Falta para Meta'}
             </span>
           </div>
-          <p className={`text-2xl font-mono font-bold ${atingiuMeta ? 'text-green-500' : 'text-amber-500'}`}>
+          <p className={`text-2xl font-mono font-medium ${atingiuMeta ? 'text-green-700' : 'text-amber-700'}`}>
             {atingiuMeta ? '+' : ''}{formatCurrency(atingiuMeta ? realizado - metaMensal : falta)}
           </p>
         </div>
@@ -63,11 +63,10 @@ export function AcompanhamentoMeta({ data, calculated, updateField }: Props) {
         <div className="p-4 border border-border bg-muted/20">
           <div className="text-sm text-muted-foreground mb-2">Progresso</div>
           <div className="w-full h-4 bg-muted rounded-none overflow-hidden">
-            <div 
-              className={`h-full transition-all duration-500 ${
-                percentAtingido >= 100 ? 'bg-green-500' : 
-                percentAtingido >= 70 ? 'bg-amber-500' : 'bg-red-500'
-              }`}
+            <div
+              className={`h-full transition-all duration-500 ${percentAtingido >= 100 ? 'bg-green-500' :
+                  percentAtingido >= 70 ? 'bg-amber-500' : 'bg-red-500'
+                }`}
               style={{ width: `${Math.min(percentAtingido, 100)}%` }}
             />
           </div>

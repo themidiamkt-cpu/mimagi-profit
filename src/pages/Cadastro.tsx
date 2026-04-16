@@ -108,7 +108,7 @@ export default function Cadastro() {
               <ShoppingBag className="w-8 h-8 text-accent" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Criar sua conta</CardTitle>
+          <CardTitle className="text-2xl font-medium">Criar sua conta</CardTitle>
           <CardDescription>Preencha os dados para começar seu planejamento financeiro</CardDescription>
         </CardHeader>
         

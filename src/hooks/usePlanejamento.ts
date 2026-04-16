@@ -157,7 +157,7 @@ export function usePlanejamento(userId: string | null) {
 
   const loadData = async () => {
     if (!userId) return;
-    
+
     try {
       setLoading(true);
       const { data: records, error } = await supabase
@@ -177,11 +177,11 @@ export function usePlanejamento(userId: string | null) {
           Number(record.investimento_ciclo) || defaultPlanejamento.investimento_ciclo;
         const margem = Number(record.margem) || defaultPlanejamento.margem;
         const faturamentoMensalPlanejado = (investimentoCiclo / 6) * margem;
-        
+
         // Parse canais_venda and custos_extras from JSON
         const canaisVendaData = parseCanaisVenda(record.canais_venda, faturamentoMensalPlanejado);
         const custosExtras = parseCustosExtras(record.custos_extras);
-        
+
         setData({
           investimento_ciclo: Number(record.investimento_ciclo) || defaultPlanejamento.investimento_ciclo,
           margem: Number(record.margem) || defaultPlanejamento.margem,
@@ -295,10 +295,10 @@ export function usePlanejamento(userId: string | null) {
 
   const saveData = useCallback(async (newData: PlanejamentoFinanceiro) => {
     if (!userId) return;
-    
+
     try {
       setSaving(true);
-      
+
       const restData = { ...newData } as Record<string, unknown>;
       delete restData.canais_venda;
       delete restData.canais_venda_mes_ativo;
@@ -314,14 +314,14 @@ export function usePlanejamento(userId: string | null) {
         custos_extras: JSON.parse(JSON.stringify(newData.custos_extras)),
         user_id: userId,
       };
-      
+
       if (recordId) {
         // Atualizar registro existente
         const { error } = await supabase
           .from('planejamentos_financeiros')
           .update(dbData)
           .eq('id', recordId);
-        
+
         if (error) throw error;
       } else {
         // Criar novo registro
@@ -330,7 +330,7 @@ export function usePlanejamento(userId: string | null) {
           .insert(dbData)
           .select()
           .single();
-        
+
         if (error) throw error;
         if (result) setRecordId(result.id);
       }
@@ -346,19 +346,10 @@ export function usePlanejamento(userId: string | null) {
     }
   }, [recordId, userId]);
 
-  const scheduleSave = useCallback((newData: PlanejamentoFinanceiro) => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      saveData(newData);
-    }, 2000);
-  }, [saveData]);
 
   // Autosave com delay de 2s
   const updateField = useCallback(<K extends keyof PlanejamentoFinanceiro>(
-    field: K, 
+    field: K,
     value: PlanejamentoFinanceiro[K]
   ) => {
     setData(prev => {
@@ -375,21 +366,39 @@ export function usePlanejamento(userId: string | null) {
         };
       }
 
-      scheduleSave(newData);
       return newData;
     });
-  }, [scheduleSave]);
+  }, []);
+
+  // Efeito para autosave
+  useEffect(() => {
+    if (loading || !userId) return;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      saveData(data);
+    }, 2000);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [data, saveData, userId, loading]);
 
   const setCanaisMesAtivo = useCallback((mes: string) => {
     setData(prev => {
       const canaisPorMes = prev.canais_venda_por_mes[mes]
         ? prev.canais_venda_por_mes
         : {
-            ...prev.canais_venda_por_mes,
-            [mes]: cloneCanaisVendaForNewMonth(
-              prev.canais_venda.length > 0 ? prev.canais_venda : createDefaultCanaisVenda()
-            ),
-          };
+          ...prev.canais_venda_por_mes,
+          [mes]: cloneCanaisVendaForNewMonth(
+            prev.canais_venda.length > 0 ? prev.canais_venda : createDefaultCanaisVenda()
+          ),
+        };
       const newData: PlanejamentoFinanceiro = {
         ...prev,
         canais_venda_mes_ativo: mes,
@@ -397,46 +406,45 @@ export function usePlanejamento(userId: string | null) {
         canais_venda: cloneCanaisVenda(canaisPorMes[mes]),
       };
 
-      scheduleSave(newData);
       return newData;
     });
-  }, [scheduleSave]);
+  }, []);
 
   // Cálculos automáticos
   const calculated: CalculatedValues = {
     investimento_mensal: data.investimento_ciclo / 6,
     faturamento_mensal: (data.investimento_ciclo / 6) * data.margem,
     faturamento_ciclo: data.investimento_ciclo * data.margem,
-    
+
     investimento_menina: (data.investimento_ciclo / 6) * (data.perc_menina / 100),
     investimento_menino: (data.investimento_ciclo / 6) * (data.perc_menino / 100),
     investimento_bebe: (data.investimento_ciclo / 6) * (data.perc_bebe / 100),
-    
+
     faturamento_menina: ((data.investimento_ciclo / 6) * data.margem) * (data.perc_menina / 100),
     faturamento_menino: ((data.investimento_ciclo / 6) * data.margem) * (data.perc_menino / 100),
     faturamento_bebe: ((data.investimento_ciclo / 6) * data.margem) * (data.perc_bebe / 100),
-    
+
     investimento_roupas: (data.investimento_ciclo / 6) * (data.perc_roupas / 100),
     investimento_sapatos: (data.investimento_ciclo / 6) * (data.perc_sapatos / 100),
     faturamento_roupas: ((data.investimento_ciclo / 6) * data.margem) * (data.perc_roupas / 100),
     faturamento_sapatos: ((data.investimento_ciclo / 6) * data.margem) * (data.perc_sapatos / 100),
-    
+
     qtd_pecas_menina: Math.round((((data.investimento_ciclo / 6) * data.margem) * (data.perc_menina / 100)) / data.tm_menina),
     qtd_pecas_menino: Math.round((((data.investimento_ciclo / 6) * data.margem) * (data.perc_menino / 100)) / data.tm_menino),
     qtd_pecas_bebe: Math.round((((data.investimento_ciclo / 6) * data.margem) * (data.perc_bebe / 100)) / data.tm_bebe),
     qtd_pecas_total: 0, // Calculado abaixo
-    
-    custo_fixo_mensal: data.custo_aluguel + data.custo_salarios + data.custo_encargos + 
-                       data.custo_agua_luz + data.custo_internet + data.custo_contador + 
-                       data.custo_embalagens + data.custo_sistema + data.custo_marketing + data.custo_outros +
-                       data.custos_extras.reduce((sum, c) => sum + c.valor, 0),
+
+    custo_fixo_mensal: data.custo_aluguel + data.custo_salarios + data.custo_encargos +
+      data.custo_agua_luz + data.custo_internet + data.custo_contador +
+      data.custo_embalagens + data.custo_sistema + data.custo_marketing + data.custo_outros +
+      data.custos_extras.reduce((sum, c) => sum + c.valor, 0),
     custo_fixo_ciclo: 0, // Calculado abaixo
     custo_produtos: data.investimento_ciclo / 6,
-    
+
     lucro_bruto: 0, // Calculado abaixo
     lucro_liquido: 0, // Calculado abaixo
     margem_lucro: 0, // Calculado abaixo
-    
+
     faturamento_minimo_mensal: 0, // Calculado abaixo
     pecas_minimas_mensal: 0, // Calculado abaixo
   };
@@ -447,26 +455,26 @@ export function usePlanejamento(userId: string | null) {
   calculated.lucro_bruto = calculated.faturamento_mensal - calculated.custo_produtos;
   calculated.lucro_liquido = calculated.lucro_bruto - calculated.custo_fixo_mensal;
   calculated.margem_lucro = calculated.faturamento_mensal > 0 ? (calculated.lucro_liquido / calculated.faturamento_mensal) * 100 : 0;
-  
+
   // Ponto de equilíbrio
-  const ticket_medio_geral = (data.tm_menina * (data.perc_menina / 100)) + 
-                             (data.tm_menino * (data.perc_menino / 100)) + 
-                             (data.tm_bebe * (data.perc_bebe / 100));
+  const ticket_medio_geral = (data.tm_menina * (data.perc_menina / 100)) +
+    (data.tm_menino * (data.perc_menino / 100)) +
+    (data.tm_bebe * (data.perc_bebe / 100));
   const margem_contribuicao = data.margem > 0 ? (data.margem - 1) / data.margem : 0;
   calculated.faturamento_minimo_mensal = margem_contribuicao > 0 ? calculated.custo_fixo_mensal / margem_contribuicao : 0;
   calculated.pecas_minimas_mensal = ticket_medio_geral > 0 ? Math.ceil(calculated.faturamento_minimo_mensal / ticket_medio_geral) : 0;
 
   // Alertas automáticos
   const alerts: Alert[] = [];
-  
+
   if (calculated.lucro_liquido < 0) {
     alerts.push({ type: 'danger', message: 'ATENÇÃO: Lucro líquido negativo! Revise seus custos ou aumente o faturamento.' });
   }
-  
+
   if (calculated.margem_lucro > 0 && calculated.margem_lucro < 10) {
     alerts.push({ type: 'warning', message: 'Margem de lucro baixa (abaixo de 10%). Considere revisar preços ou custos.' });
   }
-  
+
   if (calculated.custo_fixo_mensal > calculated.faturamento_mensal * 0.4) {
     alerts.push({ type: 'warning', message: 'Custos fixos representam mais de 40% do faturamento. Considere otimizar.' });
   }
@@ -477,10 +485,6 @@ export function usePlanejamento(userId: string | null) {
     alerts.push({ type: 'info', message: `Distribuição por público soma ${somaPublico}%. Deve somar 100%.` });
   }
 
-  const somaCategoria = data.perc_roupas + data.perc_sapatos;
-  if (Math.abs(somaCategoria - 100) > 0.01) {
-    alerts.push({ type: 'info', message: `Distribuição roupas/sapatos soma ${somaCategoria}%. Deve somar 100%.` });
-  }
 
   // Função para simulação
   const calculateSimulation = (faturamento_desejado: number): SimulationValues => {

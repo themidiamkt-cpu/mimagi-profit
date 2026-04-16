@@ -4,7 +4,9 @@ import { AlertBox } from '../AlertBox';
 import { PlanejamentoFinanceiro, CalculatedValues, Alert, CanalVenda } from '@/types/financial';
 import { formatCurrency, formatPercent } from '@/utils/formatters';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Plus, Trash2, Edit2, Check, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, RefreshCw } from 'lucide-react';
+import { useDashboardContext } from '@/contexts/DashboardContext';
+import { Button } from '@/components/ui/button';
 
 interface PlanejamentoCanaisProps {
   data: PlanejamentoFinanceiro;
@@ -23,11 +25,7 @@ const WEEK_FIELDS = [
 
 const formatMonthLabel = (mes: string) => {
   const [ano, mesNumero] = mes.split('-').map(Number);
-
-  if (!ano || !mesNumero) {
-    return mes;
-  }
-
+  if (!ano || !mesNumero) return mes;
   return new Date(ano, mesNumero - 1, 1).toLocaleDateString('pt-BR', {
     month: 'long',
     year: 'numeric',
@@ -35,11 +33,12 @@ const formatMonthLabel = (mes: string) => {
 };
 
 export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMesAtivo }: PlanejamentoCanaisProps) {
+  const { weeklyMetrics, refreshWeeklyMetrics, loadingWeekly } = useDashboardContext();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [newCanalName, setNewCanalName] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  
+
   const faturamentoMensal = calculated.faturamento_mensal;
   const faturamentoSemanal = faturamentoMensal / 4;
   const canais = data.canais_venda;
@@ -51,19 +50,38 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
 
   // Investimento total
   const investimentoTotal = canais.reduce((acc, c) => acc + (c.invest || 0), 0);
-
   const calculateMetaSemanal = (perc: number) => faturamentoSemanal * (perc / 100);
+
+  // Helper para buscar realizado automático do Bling
+  const getRealizadoAutomatico = (canalNome: string, weekKey: string) => {
+    const weekIndex = weekKey.replace('realizado_semana_', 'week');
+    if (!weeklyMetrics || !weeklyMetrics[weekIndex]) return null;
+
+    const weekData = weeklyMetrics[weekIndex];
+    const normalizedTarget = canalNome.toLowerCase().trim();
+
+    const matchingChannel = weekData.channels?.find((c: any) =>
+      c.nome.toLowerCase().trim() === normalizedTarget ||
+      normalizedTarget.includes(c.nome.toLowerCase().trim()) ||
+      c.nome.toLowerCase().trim().includes(normalizedTarget)
+    );
+
+    return matchingChannel ? matchingChannel.faturamento : 0;
+  };
 
   // Cálculos por canal
   const canaisCalculados = canais.map(canal => {
     const faturamentoEsperado = faturamentoMensal * (canal.perc / 100);
     const metaSemanalPlanejada = calculateMetaSemanal(canal.perc);
     const metaMensalPlanejada = metaSemanalPlanejada * 4;
-    const realizadoMensal =
-      canal.realizado_semana_1 +
-      canal.realizado_semana_2 +
-      canal.realizado_semana_3 +
-      canal.realizado_semana_4;
+
+    // Prioriza o automático se existir, senão usa o manual
+    const r1 = getRealizadoAutomatico(canal.nome, 'realizado_semana_1') ?? canal.realizado_semana_1;
+    const r2 = getRealizadoAutomatico(canal.nome, 'realizado_semana_2') ?? canal.realizado_semana_2;
+    const r3 = getRealizadoAutomatico(canal.nome, 'realizado_semana_3') ?? canal.realizado_semana_3;
+    const r4 = getRealizadoAutomatico(canal.nome, 'realizado_semana_4') ?? canal.realizado_semana_4;
+
+    const realizadoMensal = r1 + r2 + r3 + r4;
     const pecasPlanejadasSemana =
       canal.ticket > 0 ? Math.ceil(metaSemanalPlanejada / canal.ticket) : 0;
     const pecasNecessarias = canal.ticket > 0 ? Math.ceil(faturamentoEsperado / canal.ticket) : 0;
@@ -71,15 +89,19 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
     const vendasParaPagarInvest = canal.invest && canal.ticket > 0 ? Math.ceil(canal.invest / canal.ticket) : null;
     const atingimentoMeta = metaMensalPlanejada > 0 ? realizadoMensal / metaMensalPlanejada : null;
     const gapMetaMensal = metaMensalPlanejada - realizadoMensal;
-    
+
     let status: 'verde' | 'amarelo' | 'vermelho' = 'verde';
     if (roas !== null && canal.hasInvest) {
       if (roas < 1) status = 'vermelho';
       else if (roas < 3) status = 'amarelo';
     }
-    
+
     return {
       ...canal,
+      realizado_semana_1: r1,
+      realizado_semana_2: r2,
+      realizado_semana_3: r3,
+      realizado_semana_4: r4,
       faturamentoEsperado,
       metaSemanalPlanejada,
       metaMensalPlanejada,
@@ -117,7 +139,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
 
   // Alertas
   const alertasCanais: Alert[] = [];
-  
+
   if (!distribuicaoValida) {
     alertasCanais.push({ type: 'danger', message: `A soma da participação dos canais é ${somaPerc.toFixed(1)}%. Deve ser 100%.` });
   }
@@ -148,15 +170,15 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
 
   // Funções para gerenciar canais
   const updateCanal = <K extends keyof CanalVenda>(id: string, field: K, value: CanalVenda[K]) => {
-    const updatedCanais = canais.map(c => 
+    const updatedCanais = canais.map(c =>
       c.id === id
         ? {
-            ...c,
-            [field]: value,
-            ...(field === 'perc'
-              ? { meta_semanal: calculateMetaSemanal(Number(value)) }
-              : {}),
-          }
+          ...c,
+          [field]: value,
+          ...(field === 'perc'
+            ? { meta_semanal: calculateMetaSemanal(Number(value)) }
+            : {}),
+        }
         : c
     );
     updateField('canais_venda', updatedCanais);
@@ -164,7 +186,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
 
   const addCanal = () => {
     if (!newCanalName.trim()) return;
-    
+
     const newCanal: CanalVenda = {
       id: Date.now().toString(),
       nome: newCanalName.trim(),
@@ -181,7 +203,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
       hasInvest: false,
       roas_esperado: 0,
     };
-    
+
     updateField('canais_venda', [...canais, newCanal]);
     setNewCanalName('');
     setShowAddForm(false);
@@ -217,7 +239,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="text-sm font-medium text-muted-foreground">Competência ativa dos canais</div>
-              <div className="text-2xl font-semibold capitalize">{formatMonthLabel(data.canais_venda_mes_ativo)}</div>
+              <div className="text-2xl font-medium capitalize">{formatMonthLabel(data.canais_venda_mes_ativo)}</div>
               <div className="text-sm text-muted-foreground mt-1">
                 Cada mês guarda seu próprio planejado e realizado semanal.
               </div>
@@ -242,21 +264,21 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          <div className="p-4 bg-primary/10 border border-primary/30">
+          <div className="p-4 bg-accent-subtle border border-accent/20">
             <div className="text-sm font-medium text-muted-foreground">Faturamento Mensal Total (Meta)</div>
-            <div className="text-2xl font-bold font-mono text-primary mt-2">{formatCurrency(faturamentoMensal)}</div>
+            <div className="text-2xl font-medium font-mono text-accent mt-2">{formatCurrency(faturamentoMensal)}</div>
           </div>
           <div className="p-4 bg-muted/30 border border-border">
             <div className="text-sm font-medium text-muted-foreground">Meta Semanal Total</div>
-            <div className="text-2xl font-bold font-mono mt-2">{formatCurrency(metaSemanalTotal)}</div>
+            <div className="text-2xl font-medium font-mono mt-2">{formatCurrency(metaSemanalTotal)}</div>
           </div>
           <div className="p-4 bg-muted/30 border border-border">
             <div className="text-sm font-medium text-muted-foreground">Meta Mensal dos Canais</div>
-            <div className="text-2xl font-bold font-mono mt-2">{formatCurrency(metaMensalCanais)}</div>
+            <div className="text-2xl font-medium font-mono mt-2">{formatCurrency(metaMensalCanais)}</div>
           </div>
           <div className="p-4 bg-muted/30 border border-border">
             <div className="text-sm font-medium text-muted-foreground">Realizado Acumulado</div>
-            <div className={`text-2xl font-bold font-mono mt-2 ${getAtingimentoColor(atingimentoMensalCanais)}`}>
+            <div className={`text-2xl font-medium font-mono mt-2 ${getAtingimentoColor(atingimentoMensalCanais)}`}>
               {formatCurrency(realizadoMensalCanais)}
             </div>
           </div>
@@ -272,7 +294,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
         {/* Inputs de Distribuição por Canal */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4 border-b border-border pb-2">
-            <h3 className="text-lg font-semibold text-foreground">
+            <h3 className="text-lg font-medium text-foreground">
               Configuração dos Canais
             </h3>
             <button
@@ -283,7 +305,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
               Adicionar Canal
             </button>
           </div>
-          
+
           {/* Formulário para adicionar novo canal */}
           {showAddForm && (
             <div className="mb-4 p-4 bg-muted/50 border border-border">
@@ -324,16 +346,16 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  <th className="text-left p-3 font-semibold w-48">Canal</th>
-                  <th className="text-center p-3 font-semibold">% Planejado</th>
-                  <th className="text-center p-3 font-semibold">Ticket Médio Planejado</th>
-                  <th className="text-center p-3 font-semibold">Meta Semanal</th>
-                  <th className="text-center p-3 font-semibold">Investimento</th>
-                  <th className="text-center p-3 font-semibold">CPV</th>
-                  <th className="text-center p-3 font-semibold">Conv. %</th>
-                  <th className="text-center p-3 font-semibold">ROAS Esperado</th>
-                  <th className="text-center p-3 font-semibold">Tem Invest.?</th>
-                  <th className="text-center p-3 font-semibold w-24">Ações</th>
+                  <th className="text-left p-3 font-medium w-48">Canal</th>
+                  <th className="text-center p-3 font-medium">% Planejado</th>
+                  <th className="text-center p-3 font-medium">Ticket Médio Planejado</th>
+                  <th className="text-center p-3 font-medium">Meta Semanal</th>
+                  <th className="text-center p-3 font-medium">Investimento</th>
+                  <th className="text-center p-3 font-medium">CPV</th>
+                  <th className="text-center p-3 font-medium">Conv. %</th>
+                  <th className="text-center p-3 font-medium">ROAS Esperado</th>
+                  <th className="text-center p-3 font-medium">Tem Invest.?</th>
+                  <th className="text-center p-3 font-medium w-24">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -456,7 +478,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-muted/50 font-semibold">
+                <tr className="bg-muted/50 font-medium">
                   <td className="p-3">TOTAL</td>
                   <td className={`text-center p-3 font-mono ${distribuicaoValida ? 'text-green-600' : 'text-red-600'}`}>
                     {somaPerc.toFixed(1)}%
@@ -481,21 +503,33 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
         </div>
 
         <div className="mb-8">
-          <h3 className="text-lg font-semibold text-foreground mb-4 border-b border-border pb-2">
-            Acompanhamento Semanal das Metas por Canal
-          </h3>
+          <div className="flex items-center justify-between mb-4 border-b border-border pb-2">
+            <h3 className="text-lg font-medium text-foreground">
+              Acompanhamento Semanal das Metas por Canal
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshWeeklyMetrics}
+              disabled={loadingWeekly}
+              className="h-8 gap-2 bg-background border-border hover:bg-muted"
+            >
+              <RefreshCw className={`h-4 w-4 ${loadingWeekly ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Sincronizar com Bling</span>
+            </Button>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  <th className="text-left p-3 font-semibold">Canal</th>
+                  <th className="text-left p-3 font-medium">Canal</th>
                   {WEEK_FIELDS.map((week) => (
-                    <th key={week.key} className="text-center p-3 font-semibold">{week.label}</th>
+                    <th key={week.key} className="text-center p-3 font-medium">{week.label}</th>
                   ))}
-                  <th className="text-right p-3 font-semibold">Meta Mensal</th>
-                  <th className="text-right p-3 font-semibold">Realizado</th>
-                  <th className="text-right p-3 font-semibold">Gap</th>
-                  <th className="text-right p-3 font-semibold">Atingimento</th>
+                  <th className="text-right p-3 font-medium">Meta Mensal</th>
+                  <th className="text-right p-3 font-medium">Realizado</th>
+                  <th className="text-right p-3 font-medium">Gap</th>
+                  <th className="text-right p-3 font-medium">Atingimento</th>
                 </tr>
               </thead>
               <tbody>
@@ -523,7 +557,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
                     </td>
                   </tr>
                 ))}
-                <tr className="bg-muted/50 font-semibold">
+                <tr className="bg-muted/50 font-medium">
                   <td className="p-3">TOTAL</td>
                   {WEEK_FIELDS.map((week) => (
                     <td key={week.key} className="text-center p-3 font-mono">
@@ -546,20 +580,20 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
 
         {/* Tabela 1 - Distribuição de Faturamento */}
         <div className="mb-8">
-          <h3 className="text-lg font-semibold text-foreground mb-4 border-b border-border pb-2">
+          <h3 className="text-lg font-medium text-foreground mb-4 border-b border-border pb-2">
             Tabela: Planejado por Canal
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  <th className="text-left p-3 font-semibold">Canal</th>
-                  <th className="text-right p-3 font-semibold">% Planejado</th>
-                  <th className="text-right p-3 font-semibold">Fat. Mensal pelo %</th>
-                  <th className="text-right p-3 font-semibold">Meta Semanal</th>
-                  <th className="text-right p-3 font-semibold">Meta Mensal Cadastrada</th>
-                  <th className="text-right p-3 font-semibold">Ticket Planejado</th>
-                  <th className="text-right p-3 font-semibold">Peças/Semana</th>
+                  <th className="text-left p-3 font-medium">Canal</th>
+                  <th className="text-right p-3 font-medium">% Planejado</th>
+                  <th className="text-right p-3 font-medium">Fat. Mensal pelo %</th>
+                  <th className="text-right p-3 font-medium">Meta Semanal</th>
+                  <th className="text-right p-3 font-medium">Meta Mensal Cadastrada</th>
+                  <th className="text-right p-3 font-medium">Ticket Planejado</th>
+                  <th className="text-right p-3 font-medium">Peças/Semana</th>
                 </tr>
               </thead>
               <tbody>
@@ -568,13 +602,13 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
                     <td className="p-3 font-medium">{canal.nome}</td>
                     <td className="text-right p-3 font-mono">{formatPercent(canal.perc)}</td>
                     <td className="text-right p-3 font-mono">{formatCurrency(canal.faturamentoEsperado)}</td>
-                      <td className="text-right p-3 font-mono">{formatCurrency(canal.metaSemanalPlanejada)}</td>
+                    <td className="text-right p-3 font-mono">{formatCurrency(canal.metaSemanalPlanejada)}</td>
                     <td className="text-right p-3 font-mono">{formatCurrency(canal.metaMensalPlanejada)}</td>
                     <td className="text-right p-3 font-mono">{formatCurrency(canal.ticket)}</td>
                     <td className="text-right p-3 font-mono">{canal.pecasPlanejadasSemana}</td>
                   </tr>
                 ))}
-                <tr className="bg-muted/50 font-semibold">
+                <tr className="bg-muted/50 font-medium">
                   <td className="p-3">TOTAL</td>
                   <td className="text-right p-3 font-mono">{formatPercent(somaPerc)}</td>
                   <td className="text-right p-3 font-mono">{formatCurrency(faturamentoMensal)}</td>
@@ -590,19 +624,19 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
 
         {/* Tabela 2 - Investimento por Canal */}
         <div className="mb-8">
-          <h3 className="text-lg font-semibold text-foreground mb-4 border-b border-border pb-2">
+          <h3 className="text-lg font-medium text-foreground mb-4 border-b border-border pb-2">
             Tabela: Investimento vs Retorno por Canal
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
-                  <th className="text-left p-3 font-semibold">Canal</th>
-                  <th className="text-right p-3 font-semibold">Investimento</th>
-                  <th className="text-right p-3 font-semibold">CPV Estimado</th>
-                  <th className="text-right p-3 font-semibold">Vendas p/ Pagar Invest.</th>
-                  <th className="text-right p-3 font-semibold">ROAS Estimado</th>
-                  <th className="text-left p-3 font-semibold">Observações</th>
+                  <th className="text-left p-3 font-medium">Canal</th>
+                  <th className="text-right p-3 font-medium">Investimento</th>
+                  <th className="text-right p-3 font-medium">CPV Estimado</th>
+                  <th className="text-right p-3 font-medium">Vendas p/ Pagar Invest.</th>
+                  <th className="text-right p-3 font-medium">ROAS Estimado</th>
+                  <th className="text-left p-3 font-medium">Observações</th>
                 </tr>
               </thead>
               <tbody>
@@ -613,7 +647,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
                     <td className="text-right p-3 font-mono">{canal.cpv ? formatCurrency(canal.cpv) : '-'}</td>
                     <td className="text-right p-3 font-mono">{canal.vendasParaPagarInvest || '-'}</td>
                     <td className="text-right p-3">
-                      <span className={`px-2 py-1 text-xs font-semibold font-mono ${getStatusColor(canal.status)}`}>
+                      <span className={`px-2 py-1 text-xs font-medium font-mono ${getStatusColor(canal.status)}`}>
                         {canal.roas ? canal.roas.toFixed(2) : '-'}
                       </span>
                     </td>
@@ -631,7 +665,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Gráfico de Pizza */}
           <div className="bg-muted/30 p-4">
-            <h4 className="text-sm font-semibold text-foreground mb-4">Participação dos Canais no Faturamento</h4>
+            <h4 className="text-sm font-medium text-foreground mb-4">Participação dos Canais no Faturamento</h4>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
@@ -655,7 +689,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
 
           {/* Gráfico de Barras */}
           <div className="bg-muted/30 p-4">
-            <h4 className="text-sm font-semibold text-foreground mb-4">Meta Mensal x Realizado por Canal</h4>
+            <h4 className="text-sm font-medium text-foreground mb-4">Meta Mensal x Realizado por Canal</h4>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={barData}>
                 <CartesianGrid strokeDasharray="3 3" />
