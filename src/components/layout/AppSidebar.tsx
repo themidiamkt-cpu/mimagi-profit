@@ -47,25 +47,27 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const strategicItems = [
+const menuItems = [
   { title: 'Visão Geral', path: '/visao', icon: Eye },
-  { title: 'Variáveis', path: '/variaveis', icon: LayoutGrid },
   { title: 'Metas e Custos', path: '/planejamento', icon: TrendingUp },
-  { title: 'Distribuição', path: '/distribuicao', icon: PieChart },
-  { title: 'Produtos', path: '/produtos', icon: Package },
-  { title: 'Custos', path: '/custos', icon: DollarSign },
-  { title: 'Compras', path: '/compras', icon: ShoppingCart },
-  { title: 'Fluxo Caixa', path: '/fluxo', icon: TrendingUp },
-  { title: 'Resultados', path: '/resultados', icon: BarChart3 },
-  { title: 'Simulação', path: '/simulacao', icon: PlayCircle },
-  { title: 'Canais', path: '/canais', icon: Store },
+  { title: 'Estoque e Fluxo', path: '/estoque', icon: Box },
+  { title: 'Simulação', path: '/simulacao', icon: Settings2 },
+  { title: 'Histórico', path: '/resultados', icon: BarChart3 },
 ];
 
-const managementItems = [
-  { title: 'CRM Clientes', path: '/growth', icon: User },
-  { title: 'Vendas (Bling)', path: '/bling-sales', icon: ShoppingBag },
+const intelligenceItems = [
   { title: 'Fichinhas', path: '/fichinhas', icon: Receipt },
-  { title: 'Estoque e Fluxo', path: '/estoque', icon: Box },
+  { title: 'Clientes', path: '/growth', icon: BarChart3 },
+  { title: 'Vendas', path: '/bling-sales', icon: ShoppingBag },
+  { title: 'Produtos', path: '/produtos', icon: Package },
+];
+
+const simulatorItems = [
+  { title: 'Variáveis', path: '/variaveis', icon: LayoutGrid },
+  { title: 'Distribuição', path: '/distribuicao', icon: PieChart },
+  { title: 'Custos', path: '/custos', icon: DollarSign },
+  { title: 'Compras', path: '/compras', icon: ShoppingCart },
+  { title: 'Canais', path: '/canais', icon: Store },
 ];
 
 export function AppSidebar() {
@@ -100,13 +102,14 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        {/* Menu Principal */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/30 uppercase text-[11px] font-light tracking-[0.1em] px-3 mb-2">
-            Simulador Estratégico
+            Menu
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {strategicItems.map((item) => (
+              {menuItems.map((item) => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
@@ -124,13 +127,39 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Inteligência de Vendas */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/30 uppercase text-[11px] font-light tracking-[0.1em] px-3 mb-2">
-            Operacional e CRM
+            Inteligência de Vendas
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {managementItems.map((item) => (
+              {intelligenceItems.map((item) => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton asChild tooltip={item.title}>
+                    <NavLink
+                      to={item.path}
+                      className="flex items-center gap-3 px-3 py-2 text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                    >
+                      <item.icon className="w-5 h-5 shrink-0" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Simulador Estratégico */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/30 uppercase text-[11px] font-light tracking-[0.1em] px-3 mb-2">
+            Simulador Estratégico
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {simulatorItems.map((item) => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
