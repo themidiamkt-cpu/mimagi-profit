@@ -52,7 +52,7 @@ const menuItems = [
   { title: 'Metas e Custos', path: '/planejamento', icon: TrendingUp },
   { title: 'Estoque e Fluxo', path: '/estoque', icon: Box },
   { title: 'Simulação', path: '/simulacao', icon: Settings2 },
-  { title: 'Histórico', path: '/resultados', icon: BarChart3 },
+  { title: 'Histórico', path: '/historico', icon: BarChart3 },
 ];
 
 const intelligenceItems = [
