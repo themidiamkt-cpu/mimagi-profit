@@ -18,7 +18,19 @@ export const formatPercent = (value: number): string => {
 
 export const formatDate = (date: string | Date | null): string => {
   if (!date) return '-';
-  const d = typeof date === 'string' ? new Date(date) : date;
+
+  let d: Date;
+  if (typeof date === 'string') {
+    if (date.includes('-')) {
+      const [year, month, day] = date.split('T')[0].split('-').map(Number);
+      d = new Date(year, month - 1, day);
+    } else {
+      d = new Date(date);
+    }
+  } else {
+    d = date;
+  }
+
   try {
     return new Intl.DateTimeFormat('pt-BR').format(d);
   } catch (e) {

@@ -622,11 +622,11 @@ export const blingApi = {
                 customerMetrics[clienteId].qtdPedidos += 1;
                 customerMetrics[clienteId].pedidos.push(p);
 
-                if (new Date(p.data) > new Date(customerMetrics[clienteId].ultimaVenda)) {
+                if (p.data > customerMetrics[clienteId].ultimaVenda) {
                     customerMetrics[clienteId].ultimaVenda = p.data;
                     customerMetrics[clienteId].ultimaLojaId = p.loja?.id ?? p.loja_id ?? 'padrão';
                 }
-                if (new Date(p.data) < new Date(customerMetrics[clienteId].primeiraVenda)) {
+                if (p.data < customerMetrics[clienteId].primeiraVenda) {
                     customerMetrics[clienteId].primeiraVenda = p.data;
                 }
             }

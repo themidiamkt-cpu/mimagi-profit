@@ -66,9 +66,10 @@ export function HistoricoFinanceiro() {
         pedidos.forEach(p => {
             if (p.situacao_id === 12) return; // Ignorar cancelados
 
-            const date = new Date(p.data);
-            const year = date.getFullYear();
-            const month = date.getMonth() + 1;
+            const [y, m, d] = p.data.split('-').map(Number);
+            const date = new Date(y, m - 1, d);
+            const year = y;
+            const month = m;
             const monthKey = `${year}-${String(month).padStart(2, '0')}`;
             const displayKey = `${String(month).padStart(2, '0')}/${String(year).slice(2)}`;
 
