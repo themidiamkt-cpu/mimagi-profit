@@ -442,6 +442,42 @@ export const blingApi = {
     },
 
     /**
+     * Extrai a categoria (Público) do nome ou marca
+     */
+    extractCategoryFromName: (name: string, brand?: string): 'menina' | 'menino' | 'bebe' | 'sapatos' | null => {
+        const lowerName = name.toLowerCase();
+        const lowerBrand = (brand || '').toLowerCase();
+
+        // 1. Sapatos (Prioridade alta - NCM 64 ou Keywords)
+        if (lowerName.includes('sapato') || lowerName.includes('tenis') || lowerName.includes('sandalia') ||
+            lowerName.includes('bota') || lowerName.includes('sapatilha') || lowerName.includes('chinelo') ||
+            lowerName.includes('pantufa') || lowerName.includes('mocassim')) {
+            return 'sapatos';
+        }
+
+        // 2. Bebê
+        if (lowerName.includes('bebe') || lowerName.includes('body') || lowerName.includes('pagao') ||
+            lowerName.includes('culote') || lowerBrand.includes('anjos baby')) {
+            return 'bebe';
+        }
+
+        // 3. Menina
+        if (lowerName.includes('menina') || lowerName.includes('feminino') || lowerName.includes('vestido') ||
+            lowerName.includes('saia') || lowerName.includes('tiara') || lowerName.includes('princesa') ||
+            lowerBrand.includes('petit cherie') || lowerBrand.includes('mon sucre') || lowerBrand.includes('momi')) {
+            return 'menina';
+        }
+
+        // 4. Menino
+        if (lowerName.includes('menino') || lowerName.includes('masculino') || lowerName.includes('bermuda') ||
+            lowerName.includes('cueca') || lowerBrand.includes('youccie') || lowerBrand.includes('king & joe')) {
+            return 'menino';
+        }
+
+        return null;
+    },
+
+    /**
      * Busca contatos (clientes) com paginação
      */
     getContatos: (pagina = 1, limite = 100) => {
@@ -584,6 +620,13 @@ export const blingApi = {
         let totalPedidos = 0;
         let totalItems = 0;
 
+        const metricsByPublico: Record<string, { valor_total: number; qtd_pecas: number; ticket_medio: number }> = {
+            menina: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0 },
+            menino: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0 },
+            bebe: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0 },
+            sapatos: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0 },
+        };
+
         const normalizedFilter = brandFilter ? blingApi.normalizeBrand(brandFilter) : null;
 
         pedidos.forEach(p => {
@@ -595,10 +638,11 @@ export const blingApi = {
             let orderValueForBrand = 0;
             let hasItemsOfBrand = false;
 
+            // Garantir que temos os itens do pedido
+            const itens = Array.isArray(p.itens) ? p.itens : (Array.isArray(p.itens?.data) ? p.itens.data : []);
+
             // Se temos filtro de marca, precisamos olhar os itens
             if (normalizedFilter) {
-                const itens = Array.isArray(p.itens) ? p.itens : (Array.isArray(p.itens?.data) ? p.itens.data : []);
-
                 itens.forEach((item: any) => {
                     const sku = String(item.codigo || '').trim();
                     let itemMarca = (sku && brandMap?.[sku]) || '';
@@ -625,7 +669,6 @@ export const blingApi = {
             totalPedidos += 1;
 
             // Contabilizar itens
-            const itens = Array.isArray(p.itens) ? p.itens : (Array.isArray(p.itens?.data) ? p.itens.data : []);
             itens.forEach((item: any) => {
                 const sku = String(item.codigo || '').trim();
                 let itemMarca = (sku && brandMap?.[sku]) || '';
@@ -635,9 +678,23 @@ export const blingApi = {
                     itemMarca = extracted !== 'Sem Marca' ? extracted : 'Outros / Sem Marca';
                 }
 
+                const qtd = Number(item.quantidade || 1);
+                const valor = Number(item.valorUnidade || item.valor || 0) * qtd;
+
                 // Se houver filtro de marca, só conta itens dessa marca
                 if (!normalizedFilter || blingApi.normalizeBrand(itemMarca) === normalizedFilter) {
-                    totalItems += Number(item.quantidade || 1);
+                    totalItems += qtd;
+
+                    // Categorização por Público
+                    const category = blingApi.extractCategoryFromName(item.nome || item.descricao || '', itemMarca);
+                    if (category && metricsByPublico[category]) {
+                        metricsByPublico[category].valor_total += valor;
+                        metricsByPublico[category].qtd_pecas += qtd;
+                    } else if (!category) {
+                        // Default para menina se não identificado (como fallback principal da loja)
+                        metricsByPublico.menina.valor_total += valor;
+                        metricsByPublico.menina.qtd_pecas += qtd;
+                    }
                 }
             });
 
@@ -731,6 +788,13 @@ export const blingApi = {
             })
             .map(date => ({ date, total: evolutionMap[date] }));
 
+        // Calcular tickets médios das categorias
+        Object.keys(metricsByPublico).forEach(cat => {
+            if (metricsByPublico[cat].qtd_pecas > 0) {
+                metricsByPublico[cat].ticket_medio = metricsByPublico[cat].valor_total / metricsByPublico[cat].qtd_pecas;
+            }
+        });
+
         return {
             customers: sortedCustomers,
             channels: sortedChannels,
@@ -738,7 +802,8 @@ export const blingApi = {
             ticketMedio,
             totalPedidos,
             totalItems,
-            evolution
+            evolution,
+            metricsByPublico
         };
     },
 

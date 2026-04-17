@@ -14,6 +14,10 @@ dist-ssr
 .env
 .env.*
 
+# Project specific ignores
+cadastros /
+supabase/.temp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

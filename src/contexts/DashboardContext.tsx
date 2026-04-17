@@ -13,6 +13,7 @@ interface ActualMetrics {
   valor_total: number;
   qtd_pecas: number;
   ticket_medio: number;
+  percentual: number;
 }
 
 interface ActualMetricsByPublico {
@@ -108,16 +109,50 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const resumoExecutivo = calcularResumoExecutivo();
   const totalComprometido = getTotalComprometido();
 
-  // Calcular Métricas Reais de Compras
+  const [realTimeMetrics, setRealTimeMetrics] = useState<any | null>(null);
+  const [brandMetrics, setBrandMetrics] = useState<any[]>([]);
+  const [brandMetricsAllTime, setBrandMetricsAllTime] = useState<any[]>([]);
+  const [productMetrics, setProductMetrics] = useState<any[]>([]);
+  const [productMetricsAllTime, setProductMetricsAllTime] = useState<any[]>([]);
+  const [loadingRealTime, setLoadingRealTime] = useState(false);
+  const [loadingWeekly, setLoadingWeekly] = useState(false);
+  const [weeklyMetrics, setWeeklyMetrics] = useState<any>(null);
+  const [lojaNames, setLojaNames] = useState<Record<string, string>>({});
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // 111. Calcular Métricas Reais (Vendas Realizadas do Bling)
   const actualMetrics: ActualMetricsByPublico = {
-    menina: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0 },
-    menino: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0 },
-    bebe: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0 },
-    sapatos: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0 },
-    total: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0 }
+    menina: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0, percentual: 0 },
+    menino: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0, percentual: 0 },
+    bebe: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0, percentual: 0 },
+    sapatos: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0, percentual: 0 },
+    total: { valor_total: 0, qtd_pecas: 0, ticket_medio: 0, percentual: 100 }
   };
 
-  if (Array.isArray(compras)) {
+  // Priorizar métricas reais de vendas (Bling) se disponíveis
+  if (realTimeMetrics?.metricsByPublico) {
+    const saleMetrics = realTimeMetrics.metricsByPublico;
+
+    // Mapear métricas das categorias
+    Object.keys(saleMetrics).forEach(cat => {
+      if (actualMetrics[cat as keyof ActualMetricsByPublico]) {
+        actualMetrics[cat as keyof ActualMetricsByPublico].valor_total = saleMetrics[cat].valor_total;
+        actualMetrics[cat as keyof ActualMetricsByPublico].qtd_pecas = saleMetrics[cat].qtd_pecas;
+        actualMetrics[cat as keyof ActualMetricsByPublico].ticket_medio = saleMetrics[cat].ticket_medio;
+      }
+    });
+
+    // Calcular Percentuais e Total
+    actualMetrics.total.valor_total = realTimeMetrics.totalFaturamento || 0;
+    actualMetrics.total.qtd_pecas = realTimeMetrics.totalItems || 0;
+    actualMetrics.total.ticket_medio = realTimeMetrics.ticketMedio || 0;
+
+    const totalV = actualMetrics.total.valor_total || 1;
+    (['menina', 'menino', 'bebe', 'sapatos'] as const).forEach(cat => {
+      actualMetrics[cat].percentual = (actualMetrics[cat].valor_total / totalV) * 100;
+    });
+  } else if (Array.isArray(compras) && compras.length > 0) {
+    // Fallback para métricas de compras (como era antes) se não houver vendas
     compras.forEach(compra => {
       const val = Number(compra.valor_total) || 0;
       const qtd = Number(compra.qtd_pecas) || 0;
@@ -126,8 +161,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         actualMetrics.sapatos.valor_total += val;
         actualMetrics.sapatos.qtd_pecas += qtd;
       } else {
-        const cat = String(compra.categoria) as keyof typeof actualMetrics;
-        if (actualMetrics[cat] && typeof actualMetrics[cat] === 'object') {
+        const cat = String(compra.categoria) as keyof ActualMetricsByPublico;
+        if (actualMetrics[cat]) {
           actualMetrics[cat].valor_total += val;
           actualMetrics[cat].qtd_pecas += qtd;
         }
@@ -137,11 +172,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       actualMetrics.total.qtd_pecas += qtd;
     });
 
-    // Calcular tickets médios reais
+    // Calcular tickets médios e percentuais reais
+    const totalV = actualMetrics.total.valor_total || 1;
     const categories = ['menina', 'menino', 'bebe', 'sapatos', 'total'] as const;
     categories.forEach(cat => {
       if (actualMetrics[cat].qtd_pecas > 0) {
         actualMetrics[cat].ticket_medio = actualMetrics[cat].valor_total / actualMetrics[cat].qtd_pecas;
+      }
+      if (cat !== 'total') {
+        actualMetrics[cat].percentual = (actualMetrics[cat].valor_total / totalV) * 100;
       }
     });
   }
@@ -150,7 +189,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     if (!actualMetrics.total.valor_total) {
       toast({
         title: "Nada para sincronizar",
-        description: "Não foram encontradas compras cadastradas para este ciclo.",
+        description: "Não foram encontradas vendas/compras cadastradas para este período.",
         variant: "destructive"
       });
       return;
@@ -172,21 +211,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
     toast({
       title: "Sincronização Concluída",
-      description: "As metas foram atualizadas com base nas compras reais.",
+      description: "As metas foram atualizadas com base nos resultados reais.",
     });
   }, [actualMetrics, updateField]);
-
-  // --- Lógica de Dados Reais do Bling ---
-  const [realTimeMetrics, setRealTimeMetrics] = useState<any | null>(null);
-  const [brandMetrics, setBrandMetrics] = useState<any[]>([]);
-  const [brandMetricsAllTime, setBrandMetricsAllTime] = useState<any[]>([]);
-  const [productMetrics, setProductMetrics] = useState<any[]>([]);
-  const [productMetricsAllTime, setProductMetricsAllTime] = useState<any[]>([]);
-  const [loadingRealTime, setLoadingRealTime] = useState(false);
-  const [loadingWeekly, setLoadingWeekly] = useState(false);
-  const [weeklyMetrics, setWeeklyMetrics] = useState<any>(null);
-  const [lojaNames, setLojaNames] = useState<Record<string, string>>({});
-  const [isSyncing, setIsSyncing] = useState(false);
 
   // Buscar dados reais por semana para o mês ativo do planejamento
   const fetchWeeklyMetrics = useCallback(async () => {

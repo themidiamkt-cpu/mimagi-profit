@@ -1,11 +1,10 @@
-import { Receipt, RefreshCw } from 'lucide-react';
+import { Receipt, RefreshCw, ShoppingBag } from 'lucide-react';
 import { SectionCard } from '../SectionCard';
-import { InputField } from '../InputField';
 import { Button } from '@/components/ui/button';
 import { PlanejamentoFinanceiro, CalculatedValues } from '@/types/financial';
-import { formatCurrency, formatNumber } from '@/utils/formatters';
-
+import { formatCurrency, formatNumber, formatPercent } from '@/utils/formatters';
 import { useDashboardContext } from '@/contexts/DashboardContext';
+import { useMemo } from 'react';
 
 interface Props {
   data: PlanejamentoFinanceiro;
@@ -14,11 +13,43 @@ interface Props {
 }
 
 export function TicketMedio({ data, calculated, updateField }: Props) {
-  const { actualMetrics, syncPlanningWithActuals } = useDashboardContext();
+  const { compras, syncPlanningWithActuals } = useDashboardContext();
+
+  const brandAnalysis = useMemo(() => {
+    const brands: Record<string, { total: number; qty: number; ticket: number; perc: number }> = {};
+    let totalInvestment = 0;
+
+    compras.forEach(c => {
+      const brandName = c.marca || 'Sem Marca';
+      if (!brands[brandName]) {
+        brands[brandName] = { total: 0, qty: 0, ticket: 0, perc: 0 };
+      }
+      brands[brandName].total += Number(c.valor_total) || 0;
+      brands[brandName].qty += Number(c.qtd_pecas) || 0;
+      totalInvestment += Number(c.valor_total) || 0;
+    });
+
+    Object.keys(brands).forEach(b => {
+      if (brands[b].qty > 0) {
+        brands[b].ticket = brands[b].total / brands[b].qty;
+      }
+      if (totalInvestment > 0) {
+        brands[b].perc = (brands[b].total / totalInvestment) * 100;
+      }
+    });
+
+    return {
+      list: Object.entries(brands)
+        .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.total - a.total),
+      totalInvestment
+    };
+  }, [compras]);
+
   return (
     <SectionCard
-      title="6. TICKET MÉDIO E QUANTIDADE DE PEÇAS"
-      icon={<Receipt className="w-5 h-5" />}
+      title="6. ANÁLISE DE COMPRAS POR FORNECEDOR/MARCA"
+      icon={<ShoppingBag className="w-5 h-5 text-primary" />}
       action={
         <Button
           variant="outline"
@@ -27,80 +58,55 @@ export function TicketMedio({ data, calculated, updateField }: Props) {
           className="gap-2 text-primary border-primary/20 hover:bg-primary/5"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Sincronizar com Compras
+          Sincronizar Metas
         </Button>
       }
     >
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <InputField
-          label="Ticket Médio Menina"
-          value={data.tm_menina}
-          onChange={(v) => updateField('tm_menina', v as number)}
-          prefix="R$"
-          step={5}
-        />
-        <InputField
-          label="Ticket Médio Menino"
-          value={data.tm_menino}
-          onChange={(v) => updateField('tm_menino', v as number)}
-          prefix="R$"
-          step={5}
-        />
-        <InputField
-          label="Ticket Médio Bebê"
-          value={data.tm_bebe}
-          onChange={(v) => updateField('tm_bebe', v as number)}
-          prefix="R$"
-          step={5}
-        />
+      <div className="mb-6 bg-primary/5 rounded-xl p-4 border border-primary/10 flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase text-primary/60 mb-1">Investimento Total Capturado</p>
+          <p className="text-2xl font-black text-primary">{formatCurrency(brandAnalysis.totalInvestment)}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-black uppercase text-primary/60 mb-1">Total de Peças</p>
+          <p className="text-2xl font-black text-primary">
+            {formatNumber(brandAnalysis.list.reduce((acc, curr) => acc + curr.qty, 0))}
+          </p>
+        </div>
       </div>
 
       <table className="corporate-table">
         <thead>
           <tr>
-            <th>Público</th>
-            <th className="text-right">Ticket Médio (Meta)</th>
-            <th className="text-right">Ticket Médio (Real)</th>
-            <th className="text-right">Qtd. Peças (Meta)</th>
-            <th className="text-right text-primary font-bold">Qtd. Peças (Real)</th>
+            <th>Fornecedor / Marca</th>
+            <th className="text-right">Valor Total</th>
+            <th className="text-right text-primary font-bold">Qtd. Peças</th>
+            <th className="text-right">Ticket Médio</th>
+            <th className="text-right">% Compra</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td className="font-medium">Menina</td>
-            <td className="text-right font-mono">{formatCurrency(data.tm_menina)}</td>
-            <td className="text-right font-mono font-medium text-primary">{formatCurrency(actualMetrics.menina.ticket_medio)}</td>
-            <td className="text-right font-mono">{formatNumber(calculated.qtd_pecas_menina)}</td>
-            <td className="text-right font-mono font-bold text-primary">{formatNumber(actualMetrics.menina.qtd_pecas)}</td>
-          </tr>
-          <tr>
-            <td className="font-medium">Menino</td>
-            <td className="text-right font-mono">{formatCurrency(data.tm_menino)}</td>
-            <td className="text-right font-mono font-medium text-primary">{formatCurrency(actualMetrics.menino.ticket_medio)}</td>
-            <td className="text-right font-mono">{formatNumber(calculated.qtd_pecas_menino)}</td>
-            <td className="text-right font-mono font-bold text-primary">{formatNumber(actualMetrics.menino.qtd_pecas)}</td>
-          </tr>
-          <tr>
-            <td className="font-medium">Bebê</td>
-            <td className="text-right font-mono">{formatCurrency(data.tm_bebe)}</td>
-            <td className="text-right font-mono font-medium text-primary">{formatCurrency(actualMetrics.bebe.ticket_medio)}</td>
-            <td className="text-right font-mono">{formatNumber(calculated.qtd_pecas_bebe)}</td>
-            <td className="text-right font-mono font-bold text-primary">{formatNumber(actualMetrics.bebe.qtd_pecas)}</td>
-          </tr>
-          <tr>
-            <td className="font-medium">Sapatos</td>
-            <td className="text-right font-mono">—</td>
-            <td className="text-right font-mono font-medium text-primary">{formatCurrency(actualMetrics.sapatos.ticket_medio)}</td>
-            <td className="text-right font-mono">—</td>
-            <td className="text-right font-mono font-bold text-primary">{formatNumber(actualMetrics.sapatos.qtd_pecas)}</td>
-          </tr>
-          <tr className="bg-muted/50 border-t-2 border-accent/20">
-            <td className="font-medium">TOTAL</td>
-            <td className="text-right font-mono">—</td>
-            <td className="text-right font-mono font-bold text-accent">{formatCurrency(actualMetrics.total.ticket_medio)}</td>
-            <td className="text-right font-mono font-medium">{formatNumber(calculated.qtd_pecas_total)}</td>
-            <td className="text-right font-mono font-bold text-accent">{formatNumber(actualMetrics.total.qtd_pecas)}</td>
-          </tr>
+          {brandAnalysis.list.length > 0 ? (
+            brandAnalysis.list.map((brand) => (
+              <tr key={brand.name}>
+                <td className="font-bold text-primary">{brand.name}</td>
+                <td className="text-right font-mono">{formatCurrency(brand.total)}</td>
+                <td className="text-right font-mono font-bold text-primary">{formatNumber(brand.qty)}</td>
+                <td className="text-right font-mono italic">{formatCurrency(brand.ticket)}</td>
+                <td className="text-right font-mono">
+                  <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-black">
+                    {formatPercent(brand.perc)}
+                  </span>
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={5} className="text-center py-8 text-muted-foreground italic">
+                Nenhuma compra importada para este ciclo ainda.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </SectionCard>

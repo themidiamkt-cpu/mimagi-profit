@@ -12,8 +12,9 @@ import {
 } from 'recharts';
 import {
   Eye, TrendingUp, DollarSign, Target,
-  Users, RefreshCw, Tag, Calendar, Filter
+  Users, RefreshCw, Tag, Calendar, Filter, Receipt, ShoppingCart
 } from 'lucide-react';
+import { getCurrentMonthKey } from '@/types/financial';
 import { cn } from '@/lib/utils';
 import { AdvancedDatePicker } from "@/components/bling/AdvancedDatePicker";
 
@@ -68,7 +69,8 @@ export default function VisaoGeral() {
     setStartDate,
     setEndDate,
     setSelectedLabel,
-    isSyncing
+    isSyncing,
+    fluxoCaixa,
   } = useDashboardContext();
   const [previousPeriodMetrics, setPreviousPeriodMetrics] = useState<any | null>(null);
 
@@ -77,6 +79,17 @@ export default function VisaoGeral() {
   const metaFaturamento = calculated.faturamento_mensal || 0;
   const atingimentoMeta = metaFaturamento > 0 ? (faturamentoReal / metaFaturamento) * 100 : 0;
   const ticketMedioAtual = Number(realTimeMetrics?.ticketMedio || 0);
+
+  // Dados do Fluxo de Caixa Real para o mês atual
+  const currentMonthKey = getCurrentMonthKey();
+  const currentMonthFlow = useMemo(() => {
+    return fluxoCaixa?.find(f => f.mes === currentMonthKey);
+  }, [fluxoCaixa, currentMonthKey]);
+
+  // Se tivermos dados de boletos reais, usamos eles; senão, usamos a média planejada
+  const gastosTotaisReais = currentMonthFlow ? currentMonthFlow.total_saidas : (calculated.custo_fixo_mensal + calculated.custo_produtos);
+  const pontoEquilibrioReal = currentMonthFlow ? currentMonthFlow.faturamento_necessario : calculated.faturamento_minimo_mensal;
+  const custoComercialReal = currentMonthFlow ? currentMonthFlow.custo_compras : calculated.custo_produtos;
 
   useEffect(() => {
     let isMounted = true;
@@ -238,27 +251,28 @@ export default function VisaoGeral() {
           </div>
         </div>
 
-        <div className="bg-card border rounded-xl p-5 shadow-none">
+        <div className="bg-card border rounded-xl p-5 shadow-none relative overflow-hidden">
           <div className="flex items-center gap-2 text-destructive mb-2">
-            <DollarSign className="w-4 h-4" />
-            <span className="text-xs font-medium   tracking-wider">Gastos Totais (Plan)</span>
+            <Receipt className="w-4 h-4" />
+            <span className="text-xs font-medium   tracking-wider">Saídas Reais (Mês)</span>
           </div>
           <div className="text-2xl font-medium text-destructive">
-            {formatCurrency(calculated.custo_fixo_mensal + calculated.custo_produtos)}
+            {formatCurrency(gastosTotaisReais)}
           </div>
-          <div className="mt-2 text-xs text-muted-foreground">
-            Fixo ({formatCurrency(calculated.custo_fixo_mensal)}) + Compra
+          <div className="mt-2 text-xs text-muted-foreground flex flex-col gap-1">
+            <span>Fixo ({formatCurrency(calculated.custo_fixo_mensal)})</span>
+            <span>Boletos ({formatCurrency(custoComercialReal)})</span>
           </div>
         </div>
 
-        <div className="bg-card border rounded-xl p-5 shadow-none">
+        <div className="bg-card border rounded-xl p-5 shadow-none relative overflow-hidden">
           <div className="flex items-center gap-2 text-primary mb-2">
-            <Eye className="w-4 h-4" />
-            <span className="text-xs font-medium   tracking-wider">Ponto de Equilíbrio</span>
+            <ShoppingCart className="w-4 h-4" />
+            <span className="text-xs font-medium   tracking-wider">Volume de Vendas</span>
           </div>
-          <div className="text-2xl font-medium text-primary">{formatCurrency(calculated.faturamento_minimo_mensal)}</div>
+          <div className="text-2xl font-medium text-primary">{realTimeMetrics?.totalPedidos || 0}</div>
           <div className="mt-2 text-xs text-muted-foreground">
-            Faturamento para lucro zero
+            Total de pedidos no período
           </div>
         </div>
 
