@@ -119,25 +119,29 @@ export function XMLImportDialog({ open, onOpenChange, onConfirm }: Props) {
 
                             {parsedData && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                                         <div className="p-3 bg-background border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Marca Extraída</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Marca Extraída</p>
                                             <p className="text-sm font-bold truncate">{parsedData.marca}</p>
                                         </div>
                                         <div className="p-3 bg-background border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Valor Total</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Valor Total</p>
                                             <p className="text-sm font-bold text-primary">{formatCurrency(parsedData.valorTotal)}</p>
                                         </div>
                                         <div className="p-3 bg-background border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Peças</p>
-                                            <p className="text-sm font-bold">{parsedData.qtdPecas}</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Qtd. Peças</p>
+                                            <p className="text-sm font-bold text-accent">{parsedData.qtdPecas}</p>
                                         </div>
                                         <div className="p-3 bg-background border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Data Emissão</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Parcelamento</p>
+                                            <p className="text-sm font-bold">{parsedData.numParcelas}x</p>
+                                        </div>
+                                        <div className="p-3 bg-background border border-border">
+                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Data Emissão</p>
                                             <p className="text-sm font-bold">{new Date(parsedData.dataEmissao + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
                                         </div>
-                                        <div className="p-3 bg-background border border-border col-span-2">
-                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Estação de Destino</p>
+                                        <div className="p-3 bg-background border border-border col-span-3">
+                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Estação de Destino</p>
                                             <input
                                                 className="w-full bg-transparent border-none p-0 text-sm font-bold focus:ring-0"
                                                 value={estacao}

@@ -9,6 +9,7 @@ export interface ParsedNfe {
     }[];
     prazoEstimado: number;
     qtdPecas: number;
+    numParcelas: number;
 }
 
 export function parseNfeXml(xmlString: string): ParsedNfe {
@@ -109,12 +110,16 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
 
     let prazoEstimado = 180;
     if (parcelas.length > 0) {
-        const lastVenc = new Date(parcelas[parcelas.length - 1].vencimento);
+        prazoEstimado = parcelas.length * 30;
+    } else {
+        const lastVenc = new Date(parcelas[parcelas.length - 1]?.vencimento);
         const emiDate = new Date(dataEmissao);
         const diffTime = Math.abs(lastVenc.getTime() - emiDate.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         prazoEstimado = Math.max(30, Math.round(diffDays / 30) * 30);
     }
+
+    const numParcelas = parcelas.length || 1;
 
     return {
         marca,
@@ -122,6 +127,7 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
         dataEmissao,
         parcelas,
         prazoEstimado,
-        qtdPecas
+        qtdPecas,
+        numParcelas
     };
 }
