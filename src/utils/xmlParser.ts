@@ -8,6 +8,7 @@ export interface ParsedNfe {
         valor: number;
     }[];
     prazoEstimado: number;
+    qtdPecas: number;
 }
 
 export function parseNfeXml(xmlString: string): ParsedNfe {
@@ -27,20 +28,51 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
         return node?.textContent || '';
     };
 
-    // Try with and without namespace for robustness
-    const marca = getElementValue("//nfe:emit/nfe:xNome") || getElementValue("//emit/xNome");
+    // 1. Marca (limpeza básica)
+    let marca = getElementValue("//nfe:emit/nfe:xFant") || getElementValue("//nfe:emit/nfe:xNome") ||
+        getElementValue("//emit/xFant") || getElementValue("//emit/xNome");
+
+    if (marca) {
+        marca = marca.replace(/CONFECCOES|LTDA|S\/A|EIRELI|ME|EPP|IMPORTACAO|EXPORTACAO/gi, '').trim();
+    }
+
+    // 2. Valor Total
     const valorTotalStr = getElementValue("//nfe:total/nfe:ICMSTot/nfe:vNF") || getElementValue("//total/ICMSTot/vNF");
     const valorTotal = parseFloat(valorTotalStr) || 0;
 
+    // 3. Data Emissao
     const dhEmi = getElementValue("//nfe:ide/nfe:dhEmi") || getElementValue("//ide/dhEmi") || getElementValue("//nfe:ide/nfe:dEmi") || getElementValue("//ide/dEmi");
     const dataEmissao = dhEmi ? dhEmi.substring(0, 10) : new Date().toISOString().substring(0, 10);
 
-    // Parse installments (dup)
+    // 4. Quantidade de Peças (Soma de qCom)
+    let qtdPecas = 0;
+    const itensResult = xmlDoc.evaluate("//nfe:det/nfe:prod/nfe:qCom", xmlDoc, nsResolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+    let itemNode = itensResult.iterateNext();
+
+    if (!itemNode) {
+        const fallbackItens = xmlDoc.evaluate("//det/prod/qCom", xmlDoc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+        itemNode = fallbackItens.iterateNext();
+    }
+
+    while (itemNode) {
+        qtdPecas += parseFloat(itemNode.textContent || '0');
+        // @ts-ignore
+        itemNode = itensResult.iterateNext();
+    }
+
+    // Se XPath falhou, tenta getElementsByTagName
+    if (qtdPecas === 0) {
+        const qComNodes = xmlDoc.getElementsByTagName("qCom");
+        for (let i = 0; i < qComNodes.length; i++) {
+            qtdPecas += parseFloat(qComNodes[i].textContent || '0');
+        }
+    }
+
+    // 5. Parcelas (dup)
     const parcelas: ParsedNfe['parcelas'] = [];
     const duplicatasResult = xmlDoc.evaluate("//nfe:cobr/nfe:dup", xmlDoc, nsResolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
     let dupNode = duplicatasResult.iterateNext();
 
-    // Fallback for no namespace
     if (!dupNode) {
         const fallbackResult = xmlDoc.evaluate("//cobr/dup", xmlDoc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
         dupNode = fallbackResult.iterateNext();
@@ -61,11 +93,9 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
         });
 
         // @ts-ignore
-        dupNode = duplicatasResult.iterateNext() || (xmlDoc.evaluate("//cobr/dup", xmlDoc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null).iterateNext());
-        // Note: The above logic for iteration might need care. Let's simplify.
+        dupNode = duplicatasResult.iterateNext();
     }
 
-    // If no iterations above, try a simpler loop if iterateNext failed due to iterator mixing
     if (parcelas.length === 0) {
         const dupNodes = xmlDoc.getElementsByTagName("dup");
         for (let i = 0; i < dupNodes.length; i++) {
@@ -77,15 +107,12 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
         }
     }
 
-    // Calculate estimated plazo (days from emission to last installment)
-    let prazoEstimado = 180; // Default
+    let prazoEstimado = 180;
     if (parcelas.length > 0) {
         const lastVenc = new Date(parcelas[parcelas.length - 1].vencimento);
         const emiDate = new Date(dataEmissao);
         const diffTime = Math.abs(lastVenc.getTime() - emiDate.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        // Round to nearest 30 for the system's logic
         prazoEstimado = Math.max(30, Math.round(diffDays / 30) * 30);
     }
 
@@ -94,6 +121,7 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
         valorTotal,
         dataEmissao,
         parcelas,
-        prazoEstimado
+        prazoEstimado,
+        qtdPecas
     };
 }

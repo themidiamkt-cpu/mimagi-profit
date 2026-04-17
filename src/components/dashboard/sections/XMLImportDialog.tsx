@@ -16,6 +16,7 @@ export function XMLImportDialog({ open, onOpenChange, onConfirm }: Props) {
     const [file, setFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<ParsedNfe | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [estacao, setEstacao] = useState(`Inverno ${new Date().getFullYear()}`);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,13 +56,14 @@ export function XMLImportDialog({ open, onOpenChange, onConfirm }: Props) {
         // Converte os dados da NFe para o formato da tabela Compras
         const novaCompra: Omit<Compra, 'id'> = {
             ...defaultCompra,
-            estacao: `Importado ${new Date().getFullYear()}`, // Valor padrão
+            estacao: estacao,
             marca: parsedData.marca,
             valor_total: parsedData.valorTotal,
             prazo_pagamento: parsedData.prazoEstimado,
             num_entregas: 1, // Geralmente NFe é uma entrega única
             data_entrega_1: parsedData.dataEmissao, // Usa emissão como base
             categoria: 'menina', // Default
+            qtd_pecas: parsedData.qtdPecas,
         };
 
         onConfirm(novaCompra);
@@ -117,22 +119,31 @@ export function XMLImportDialog({ open, onOpenChange, onConfirm }: Props) {
 
                             {parsedData && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                                         <div className="p-3 bg-background border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Marca Extraída</p>
-                                            <p className="text-sm font-bold">{parsedData.marca}</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Marca Extraída</p>
+                                            <p className="text-sm font-bold truncate">{parsedData.marca}</p>
                                         </div>
                                         <div className="p-3 bg-background border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Valor Total</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Valor Total</p>
                                             <p className="text-sm font-bold text-primary">{formatCurrency(parsedData.valorTotal)}</p>
                                         </div>
                                         <div className="p-3 bg-background border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Data Emissão</p>
-                                            <p className="text-sm font-bold">{new Date(parsedData.dataEmissao + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Peças</p>
+                                            <p className="text-sm font-bold">{parsedData.qtdPecas}</p>
                                         </div>
                                         <div className="p-3 bg-background border border-border">
-                                            <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Prazo Estimado</p>
-                                            <p className="text-sm font-bold">{parsedData.prazoEstimado} dias</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Data Emissão</p>
+                                            <p className="text-sm font-bold">{new Date(parsedData.dataEmissao + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                                        </div>
+                                        <div className="p-3 bg-background border border-border col-span-2">
+                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Estação de Destino</p>
+                                            <input
+                                                className="w-full bg-transparent border-none p-0 text-sm font-bold focus:ring-0"
+                                                value={estacao}
+                                                onChange={(e) => setEstacao(e.target.value)}
+                                                placeholder="Ex: Inverno 2026"
+                                            />
                                         </div>
                                     </div>
 
