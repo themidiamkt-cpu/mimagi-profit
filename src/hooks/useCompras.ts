@@ -16,7 +16,7 @@ export function useCompras(
 
   // Carregar compras
   useEffect(() => {
-    if (planejamentoId && userId) {
+    if (userId) {
       loadCompras();
     } else {
       setLoading(false);
@@ -24,16 +24,20 @@ export function useCompras(
   }, [planejamentoId, userId]);
 
   const loadCompras = async () => {
-    if (!planejamentoId || !userId) return;
+    if (!userId) return;
 
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('compras')
         .select('*')
-        .eq('planejamento_id', planejamentoId)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true });
+        .eq('user_id', userId);
+
+      if (planejamentoId) {
+        query = query.eq('planejamento_id', planejamentoId);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: true });
 
       if (error) throw error;
 

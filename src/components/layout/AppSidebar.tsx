@@ -1,20 +1,13 @@
 import {
-  LayoutDashboard,
-  PieChart,
   Package,
-  DollarSign,
-  ShoppingCart,
   TrendingUp,
   BarChart3,
-  PlayCircle,
   Store,
-  LayoutGrid,
   Eye,
   LogOut,
   User,
   Receipt,
   ShoppingBag,
-  Star,
   RefreshCw,
   Shield,
   Box,
@@ -62,13 +55,6 @@ const intelligenceItems = [
   { title: 'Produtos', path: '/produtos', icon: Package },
 ];
 
-const simulatorItems = [
-  { title: 'Variáveis', path: '/variaveis', icon: LayoutGrid },
-  { title: 'Distribuição', path: '/distribuicao', icon: PieChart },
-  { title: 'Custos', path: '/custos', icon: DollarSign },
-  { title: 'Compras', path: '/compras', icon: ShoppingCart },
-  { title: 'Canais', path: '/canais', icon: Store },
-];
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -152,30 +138,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Simulador Estratégico */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/30 uppercase text-[11px] font-light tracking-[0.1em] px-3 mb-2">
-            Simulador Estratégico
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {simulatorItems.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton asChild tooltip={item.title}>
-                    <NavLink
-                      to={item.path}
-                      className="flex items-center gap-3 px-3 py-2 text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                    >
-                      <item.icon className="w-5 h-5 shrink-0" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
 
         {/* Admin Section */}
         {isAdmin && (

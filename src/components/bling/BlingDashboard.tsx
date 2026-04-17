@@ -23,16 +23,19 @@ interface BlingDashboardProps {
         totalPedidos: number;
         totalItems?: number;
     } | null;
+    pedidos?: any[]; // Adicionado para permitir unificação com o pai
 }
 
-export function BlingDashboard({ metrics }: BlingDashboardProps) {
-    const { isConnected, loading, pedidos, contatos, connect, disconnect, fetchDashboardData } = useBling();
+export function BlingDashboard({ metrics, pedidos: propPedidos }: BlingDashboardProps) {
+    const { isConnected, loading, pedidos: livePedidos, contatos, connect, disconnect, fetchDashboardData } = useBling();
+
+    const displayPedidos = propPedidos || livePedidos;
 
     useEffect(() => {
-        if (isConnected) {
+        if (isConnected && !propPedidos) {
             fetchDashboardData();
         }
-    }, [isConnected]);
+    }, [isConnected, propPedidos]);
 
     if (loading && isConnected === null) {
         return (
@@ -135,14 +138,14 @@ export function BlingDashboard({ metrics }: BlingDashboardProps) {
 
                 <Card className="bg-card border shadow-none overflow-hidden relative group">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-xs font-medium   tracking-wider text-muted-foreground">Produtos Vendidos</CardTitle>
+                        <CardTitle className="text-xs font-medium   tracking-wider text-muted-foreground">Total de Pedidos</CardTitle>
                         <ShoppingCart className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-black text-foreground">
-                            {metrics ? (metrics as any).totalItems || metrics.totalPedidos : '---'}
+                            {metrics ? metrics.totalPedidos : '---'}
                         </div>
-                        <p className="text-[10px] text-muted-foreground mt-1">Soma das quantidades de todos os itens</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">Pedidos processados no período</p>
                     </CardContent>
                     <div className="absolute bottom-0 left-0 h-1 w-full bg-orange-500/20" />
                 </Card>
@@ -159,14 +162,14 @@ export function BlingDashboard({ metrics }: BlingDashboardProps) {
                         <ShoppingCart className="w-4 h-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {pedidos.length === 0 ? (
+                        {displayPedidos.length === 0 ? (
                             <div className="py-8 text-center text-muted-foreground space-y-2">
                                 <Clock className="w-8 h-8 mx-auto opacity-20" />
                                 <p className="text-sm">Nenhum pedido encontrado recentemente.</p>
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {pedidos.map((pedido: any) => (
+                                {displayPedidos.map((pedido: any) => (
                                     <div key={pedido.id} className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
                                         <div className="space-y-1">
                                             <p className="text-sm font-medium">#{pedido.numero || pedido.id}</p>
@@ -193,15 +196,15 @@ export function BlingDashboard({ metrics }: BlingDashboardProps) {
                         <Users className="w-4 h-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {contatos.length === 0 ? (
+                        {contatos.length === 0 && (!metrics?.customers || metrics.customers.length === 0) ? (
                             <div className="py-8 text-center text-muted-foreground space-y-2">
                                 <AlertTriangle className="w-8 h-8 mx-auto opacity-20" />
                                 <p className="text-sm">Nenhum contato encontrado.</p>
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {contatos.map((contato: any) => (
-                                    <div key={contato.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
+                                {(contatos.length > 0 ? contatos : (metrics?.customers?.slice(0, 10) || [])).map((contato: any) => (
+                                    <div key={contato.id || contato.contatoId} className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
                                         <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-xs font-medium text-muted-foreground">
                                             {(contato.nome || '?').charAt(0)}
                                         </div>

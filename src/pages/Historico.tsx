@@ -5,28 +5,22 @@ import { formatCurrency } from '@/utils/formatters';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
-import { Tag, RefreshCw, BarChart3, Package } from 'lucide-react';
+import { Tag, RefreshCw, BarChart3, Package, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const COLORS = ['#c96442', '#3b6d11', '#185fa5', '#854f0b', '#a32d2d', '#6b6b68'];
 
 export default function Historico() {
     const {
-        brandMetrics,
-        productMetrics,
-        startDate,
-        endDate,
-        selectedLabel,
-        setStartDate,
-        setEndDate,
-        setSelectedLabel,
+        brandMetricsAllTime,
+        productMetricsAllTime,
         isSyncing,
         refreshRealTime,
         loadingRealTime
     } = useDashboardContext();
 
     // Dados para Gráfico de Marcas (Excluindo "Sem Marca")
-    const brandChartData = brandMetrics
+    const brandChartData = brandMetricsAllTime
         .filter(bm => !['Outros / Sem Marca', 'Sem Marca', 'N/A', 'Sem Detalhamento (Resync necessário)'].includes(bm.marca))
         .slice(0, 10);
 
@@ -46,16 +40,10 @@ export default function Historico() {
                         </div>
                     )}
 
-                    <AdvancedDatePicker
-                        dateStart={startDate}
-                        dateEnd={endDate}
-                        label={selectedLabel}
-                        onRangeSelect={(start, end, label) => {
-                            setStartDate(start);
-                            setEndDate(end);
-                            setSelectedLabel(label);
-                        }}
-                    />
+                    <div className="flex items-center gap-2 px-4 py-2 bg-muted/30 border rounded-lg">
+                        <Calendar className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Período: Tempo Total</span>
+                    </div>
 
                     <button
                         onClick={() => refreshRealTime()}
@@ -134,7 +122,7 @@ export default function Historico() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {brandMetrics.map((brand: any, idx: number) => (
+                                {brandMetricsAllTime.map((brand: any, idx: number) => (
                                     <tr key={idx} className="hover:bg-muted/5 transition-colors">
                                         <td className="p-3 font-medium">{brand.marca}</td>
                                         <td className="p-3 text-center">{brand.qtdItens}</td>
@@ -163,7 +151,7 @@ export default function Historico() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {productMetrics.slice(0, 50).map((prod: any, idx: number) => (
+                                {productMetricsAllTime.slice(0, 50).map((prod: any, idx: number) => (
                                     <tr key={idx} className="hover:bg-muted/5 transition-colors">
                                         <td className="p-4">
                                             <div className="font-medium truncate max-w-[250px]" title={prod.nome}>
@@ -175,10 +163,10 @@ export default function Historico() {
                                         <td className="p-4 text-right font-mono">{formatCurrency(prod.faturamento)}</td>
                                     </tr>
                                 ))}
-                                {productMetrics.length === 0 && (
+                                {productMetricsAllTime.length === 0 && (
                                     <tr>
                                         <td colSpan={3} className="p-8 text-center text-muted-foreground italic">
-                                            Nenhum produto encontrado no período.
+                                            Nenhum produto encontrado.
                                         </td>
                                     </tr>
                                 )}

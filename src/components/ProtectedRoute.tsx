@@ -33,7 +33,7 @@ export function ProtectedRoute({ children, requireAdmin = false }: Props) {
 
   // Admin route check
   if (requireAdmin && !isAdmin) {
-    return <Navigate to="/variaveis" replace />;
+    return <Navigate to="/visao" replace />;
   }
 
   // 4. Case-specific restriction for themidiamkt@gmail.com

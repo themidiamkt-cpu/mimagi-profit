@@ -161,9 +161,14 @@ export const blingApi = {
      * Busca pedidos de venda com suporte a filtros e paginação
      */
     getPedidos: (pagina = 1, limite = 100, status?: number, dataInicial?: string, dataFinal?: string) => {
-        // expand[]=itens é CRÍTICO para análise de marcas no dashboard
-        let endpoint = `/pedidos/vendas?pagina=${pagina}&limite=${limite}&expand[]=itens`;
-        if (status) endpoint += `&situacao=${status}`;
+        // expand[]=itens e expand[]=contato são CRÍTICOS para análise no dashboard
+        let endpoint = `/pedidos/vendas?pagina=${pagina}&limite=${limite}&expand[]=itens&expand[]=contato`;
+
+        // Se nenhum status for passado e não houver data, assume que é para o card de "Últimos Pedidos" 
+        // e mostra Atendidos (6) e Em Aberto (9) conforme pedido do usuário.
+        const situacao = status || (dataInicial ? undefined : '6,9');
+
+        if (situacao) endpoint += `&situacao=${situacao}`;
         if (dataInicial) endpoint += `&dataInicial=${dataInicial}`;
         if (dataFinal) endpoint += `&dataFinal=${dataFinal}`;
 
@@ -191,6 +196,10 @@ export const blingApi = {
 
             if (dataInicial) query = query.gte('data', dataInicial);
             if (dataFinal) query = query.lte('data', dataFinal);
+
+            // Filtro por status "Atendido" (6) e "Em Aberto" (9) conforme pedido do usuário
+            // Também permite nulo para vendas manuais da planilha
+            query = query.or(`situacao_id.in.(6,9),situacao_id.is.null`);
 
             query = query.range(page * 1000, (page + 1) * 1000 - 1);
 
@@ -282,6 +291,40 @@ export const blingApi = {
             .replace(/[\u0300-\u036f]/g, '')
             .trim()
             .toLowerCase();
+    },
+
+    /**
+     * Calcula o segmento RFM de forma dinâmica (regras específicas Mimagi Kids)
+     */
+    calculateRFMSegment: (orders: number, ltv: number, lastDate: string | null): string => {
+        if (!lastDate) return 'perdido';
+
+        const lastPurchaseDate = new Date(lastDate);
+        if (isNaN(lastPurchaseDate.getTime())) return 'perdido';
+
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - lastPurchaseDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        // 🔴 Perdido: +60 dias
+        if (diffDays > 60) return 'perdido';
+
+        // 🟣 Campeão (Premium): 6+ pedidos, LTV > 3000 e recente (15 dias)
+        if (orders >= 6 && ltv >= 3000 && diffDays <= 15) return 'campeao';
+
+        // 🟢 VIP: 3+ pedidos, LTV > 1500 e ativo (30 dias)
+        if (orders >= 3 && ltv >= 1500 && diffDays <= 30) return 'vip';
+
+        // 🟠 Em Risco: 2+ pedidos, 31-60 dias
+        if (diffDays > 30 && orders >= 2) return 'em_risco';
+
+        // 🔵 Recorrente: 2+ pedidos, ativo (30 dias)
+        if (diffDays <= 30 && orders >= 2) return 'recorrente';
+
+        // 🟡 Novo: 1 pedido, ativo (30 dias)
+        if (diffDays <= 30 && orders === 1) return 'novo';
+
+        // Fallback (ex: 1 pedido e 31-60 dias)
+        return 'em_risco';
     },
 
     /**
@@ -544,12 +587,10 @@ export const blingApi = {
         const normalizedFilter = brandFilter ? blingApi.normalizeBrand(brandFilter) : null;
 
         pedidos.forEach(p => {
-            // Suporte a formato Bling API (p.situacao.id) ou Supabase Flat (p.situacao_id)
-            const situacaoId = p.situacao?.id ?? p.situacao_id;
-            const situacaoNome = p.situacao?.nome ?? p.situacao_nome;
-
-            // Ignorar pedidos cancelados (ID 12 no Bling v3)
-            if (situacaoId === 12) return;
+            // Mostrar pedidos ATENDIDOS (6) e EM ABERTO (9)
+            // Pedidos manuais (sem situacao_id) também são incluídos
+            const sId = p.situacao?.id ?? p.situacao_id;
+            if (sId !== null && sId !== undefined && sId !== 6 && sId !== 9) return;
 
             let orderValueForBrand = 0;
             let hasItemsOfBrand = false;
@@ -576,7 +617,7 @@ export const blingApi = {
 
                 if (!hasItemsOfBrand) return; // Pula este pedido se não tiver a marca
             } else {
-                orderValueForBrand = parseFloat(p.total || 0);
+                orderValueForBrand = Number(p.total || 0);
                 hasItemsOfBrand = true;
             }
 
@@ -1153,23 +1194,28 @@ export const blingApi = {
             if (p.situacao_id === 12) return; // Ignorar cancelados
             if (p.contato_nome?.toLowerCase().includes('consumidor final')) return; // Ignorar genérico
 
-            // Tenta encontrar o cliente no CRM
+            // 1. Tenta por ID (Bling ID ou CRM ID)
             let cId = idMap[String(p.contato_id)];
 
+            // 2. Se não achou por ID, tenta por Nome Exato (normalizado)
             if (!cId && p.contato_nome) {
                 const cleanName = blingApi.normalizeName(p.contato_nome);
+                cId = nameMap[cleanName];
 
-                // Busca agressiva: encontrar todos que começam com esse nome e pegar o mais longo
-                // Isso resolve o caso de existir "Genielly" e "Genielly Brito" (unifica no maior)
-                const matches = allCustomers.filter(c => {
-                    const normCustName = blingApi.normalizeName(c.name || '');
-                    return normCustName.startsWith(cleanName) || cleanName.startsWith(normCustName);
-                });
+                // 3. Fallback: Se ainda não achou, busca por aproximação apenas se não houver um conflito óbvio
+                if (!cId) {
+                    const matches = allCustomers.filter(c => {
+                        const normCustName = blingApi.normalizeName(c.name || '');
+                        return normCustName === cleanName ||
+                            (cleanName.length > 5 && normCustName.includes(cleanName)) ||
+                            (normCustName.length > 5 && cleanName.includes(normCustName));
+                    });
 
-                if (matches.length > 0) {
-                    // Ordenar por comprimento do nome decrescente para pegar o mais completo
-                    const bestMatch = matches.sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0))[0];
-                    cId = bestMatch.id;
+                    if (matches.length > 0) {
+                        // Ordenar por comprimento do nome decrescente para pegar o mais completo
+                        const bestMatch = matches.sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0))[0];
+                        cId = bestMatch.id;
+                    }
                 }
             }
 
@@ -1224,40 +1270,6 @@ export const blingApi = {
                     bling_id: customer.bling_id
                 };
             } else {
-                // --- Recência (R) ---
-                const diffDays = Math.floor((now.getTime() - stats.lastDate.getTime()) / (1000 * 60 * 60 * 24));
-                let rScore = 1;
-                if (diffDays <= 30) rScore = 5;
-                else if (diffDays <= 90) rScore = 4;
-                else if (diffDays <= 180) rScore = 3;
-                else if (diffDays <= 365) rScore = 2;
-
-                // --- Frequência (F) ---
-                let fScore = 1;
-                if (stats.count > 10) fScore = 5;
-                else if (stats.count >= 6) fScore = 4;
-                else if (stats.count >= 3) fScore = 3;
-                else if (stats.count === 2) fScore = 2;
-
-                // --- Monetário (M) ---
-                let mScore = 1;
-                if (stats.total > 5000) mScore = 5;
-                else if (stats.total > 2000) mScore = 4;
-                else if (stats.total > 1000) mScore = 3;
-                else if (stats.total > 500) mScore = 2;
-
-                // --- Definir Segmento ---
-                const avgScore = (rScore + fScore + mScore) / 3;
-                let segment = 'novo';
-
-                if (rScore >= 4 && fScore >= 4 && mScore >= 4) segment = 'campeao';
-                else if (rScore >= 3 && fScore >= 3 && mScore >= 3) segment = 'leal';
-                else if (rScore >= 4 && fScore === 1) segment = 'novo';
-                else if (rScore <= 2 && stats.count >= 2) segment = 'em_risco';
-                else if (rScore === 1 && stats.count === 1) segment = 'perdido';
-                else if (avgScore >= 4) segment = 'campeao';
-                else if (avgScore >= 3) segment = 'recorrente';
-
                 const lifetimeMetrics = blingApi.calculateCustomerLifetimeMetrics({
                     totalSpent: stats.total,
                     totalOrders: stats.count,
@@ -1271,10 +1283,6 @@ export const blingApi = {
                     ltv: lifetimeMetrics.ltv,
                     ticket_medio: lifetimeMetrics.ticketMedio,
                     last_purchase_date: stats.lastDate.toISOString().split('T')[0],
-                    rfm_recency: rScore,
-                    rfm_frequency: fScore,
-                    rfm_monetary: mScore,
-                    rfm_segment: segment,
                     updated_at: new Date().toISOString(),
                     bling_id: stats.bling_id
                 };
@@ -1312,8 +1320,10 @@ export const blingApi = {
         const brandMetrics: Record<string, { label: string; faturamento: number; qtdItens: number }> = {};
 
         pedidos.forEach((p: any) => {
-            // Ignorar cancelados (ID 12 no Bling v3)
-            if (p.situacao_id === 12) return;
+            // Filtrar pedidos ATENDIDOS (6) e EM ABERTO (9)
+            // Pedidos manuais (sem situacao_id) também são incluídos
+            const sId = p.situacao?.id ?? p.situacao_id;
+            if (sId !== null && sId !== undefined && sId !== 6 && sId !== 9) return;
 
             // Suporta formato novo (array normalizado) ou antigo (p.itens.data)
             const itens = Array.isArray(p.itens) ? p.itens : (Array.isArray(p.itens?.data) ? p.itens.data : []);
@@ -1415,7 +1425,10 @@ export const blingApi = {
         const productMetrics: Record<string, { nome: string; codigo: string; marca: string; faturamento: number; qtd: number }> = {};
 
         pedidos.forEach((p: any) => {
-            if (p.situacao_id === 12) return;
+            // Filtrar pedidos ATENDIDOS (6) e EM ABERTO (9)
+            // Pedidos manuais (sem situacao_id) também são incluídos
+            const sId = p.situacao?.id ?? p.situacao_id;
+            if (sId !== null && sId !== undefined && sId !== 6 && sId !== 9) return;
 
             const itens = Array.isArray(p.itens) ? p.itens : (Array.isArray(p.itens?.data) ? p.itens.data : []);
 
@@ -1450,6 +1463,6 @@ export const blingApi = {
         });
 
         return Object.values(productMetrics)
-            .sort((a, b) => b.faturamento - a.faturamento);
+            .sort((a, b) => b.qtd - a.qtd);
     }
 };

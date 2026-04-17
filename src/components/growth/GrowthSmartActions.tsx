@@ -10,16 +10,15 @@ import {
     PlusCircle,
     MessageSquare,
     Target,
-    Tag,
     Zap,
     ChevronRight,
-    Filter,
     CheckCircle2,
     Clock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/utils/formatters";
 import { differenceInDays, parseISO } from "date-fns";
+import { blingApi } from "@/lib/blingApi";
 
 interface GrowthCustomer {
     id: string;
@@ -30,7 +29,7 @@ interface GrowthCustomer {
     total_spent: number;
     ltv: number;
     last_purchase_date: string | null;
-    rfm_segment: string;
+    rfm_segment?: string;
 }
 
 interface SmartActionProps {
@@ -58,100 +57,106 @@ export const GrowthSmartActions = ({ customers: allCustomers, onFilterChange }: 
         return allCustomers.filter(c => c.phone && c.phone.trim().length > 0);
     }, [allCustomers]);
 
-    const metrics = useMemo(() => {
-        const now = new Date();
-
-        const inRisk = customers.filter(c => {
-            if (!c.last_purchase_date) return false;
-            const days = differenceInDays(now, parseISO(c.last_purchase_date));
-            return days > 30 && days <= 60;
+    const globalMetrics = useMemo(() => {
+        const inRisk = allCustomers.filter(c => (c.rfm_segment || blingApi.calculateRFMSegment(c.total_orders, c.ltv || c.total_spent, c.last_purchase_date)) === 'em_risco');
+        const vip = allCustomers.filter(c => {
+            const segment = c.rfm_segment || blingApi.calculateRFMSegment(c.total_orders, c.ltv || c.total_spent, c.last_purchase_date);
+            return segment === 'vip' || segment === 'campeao';
         });
-
-        const vip = customers.filter(c => {
-            // Logic for VIP: High LTV and more than 3 orders
-            return c.ltv > 500 || c.total_orders > 3;
-        });
-
-        const news = customers.filter(c => c.total_orders === 1);
-
-        const inactive = customers.filter(c => {
-            if (!c.last_purchase_date) return true;
-            const days = differenceInDays(now, parseISO(c.last_purchase_date));
-            return days > 60;
-        });
+        const news = allCustomers.filter(c => (c.rfm_segment || blingApi.calculateRFMSegment(c.total_orders, c.ltv || c.total_spent, c.last_purchase_date)) === 'novo');
+        const inactive = allCustomers.filter(c => (c.rfm_segment || blingApi.calculateRFMSegment(c.total_orders, c.ltv || c.total_spent, c.last_purchase_date)) === 'perdido');
 
         return {
             inRisk,
             vip,
             news,
             inactive,
-            readyForReorder: customers.filter(c => {
-                // Simple logic for reorder: 30 days since last purchase for loyal customers
+            readyForReorder: allCustomers.filter(c => {
+                const now = new Date();
                 if (!c.last_purchase_date) return false;
                 const days = differenceInDays(now, parseISO(c.last_purchase_date));
-                return days >= 25 && days <= 35 && c.total_orders > 1;
+                return days >= 25 && days <= 35 && (c.total_orders || 0) > 1;
             })
         };
-    }, [customers]);
+    }, [allCustomers]);
+
+    const actionableMetrics = useMemo(() => {
+        return {
+            inRisk: globalMetrics.inRisk.filter(c => c.phone && c.phone.trim().length > 0),
+            vip: globalMetrics.vip.filter(c => c.phone && c.phone.trim().length > 0),
+            news: globalMetrics.news.filter(c => c.phone && c.phone.trim().length > 0),
+            inactive: globalMetrics.inactive.filter(c => c.phone && c.phone.trim().length > 0),
+            readyForReorder: globalMetrics.readyForReorder.filter(c => c.phone && c.phone.trim().length > 0)
+        };
+    }, [globalMetrics]);
 
     const dailyActions = [
         {
-            id: "risk",
-            title: `Recuperar ${metrics.inRisk.length} clientes em risco`,
-            desc: "não compram há mais de 30 dias",
+            id: "em_risco",
+            title: `Recuperar ${globalMetrics.inRisk.length} clientes em risco`,
+            desc: `${actionableMetrics.inRisk.length} com WhatsApp disponível`,
             type: "risk",
-            count: metrics.inRisk.length,
+            count: globalMetrics.inRisk.length,
             icon: <AlertTriangle className="h-5 w-5 text-red-500" />,
             color: "border-red-100 bg-red-50/50"
         },
         {
             id: "vip",
-            title: `Oferecer produto premium para ${metrics.vip.length} clientes VIP`,
-            desc: "alto LTV + alta frequência",
+            title: `Oferecer produto premium para ${globalMetrics.vip.length} clientes VIP`,
+            desc: `${actionableMetrics.vip.length} com WhatsApp disponível`,
             type: "vip",
-            count: metrics.vip.length,
+            count: globalMetrics.vip.length,
             icon: <Star className="h-5 w-5 text-emerald-500" />,
             color: "border-emerald-100 bg-emerald-50/50"
         },
         {
-            id: "news",
-            title: `Incentivar segunda compra de ${metrics.news.length} clientes novos`,
-            desc: "fizeram apenas 1 pedido",
+            id: "novo",
+            title: `Incentivar segunda compra de ${globalMetrics.news.length} clientes novos`,
+            desc: `${actionableMetrics.news.length} com WhatsApp disponível`,
             type: "news",
-            count: metrics.news.length,
+            count: globalMetrics.news.length,
             icon: <PlusCircle className="h-5 w-5 text-amber-500" />,
             color: "border-amber-100 bg-amber-50/50"
         },
         {
-            id: "inactive",
-            title: `Reativar ${metrics.inactive.length} clientes inativos`,
-            desc: "mais de 60 dias sem compra",
+            id: "perdido",
+            title: `Reativar ${globalMetrics.inactive.length} clientes inativos`,
+            desc: `${actionableMetrics.inactive.length} com WhatsApp disponível`,
             type: "inactive",
-            count: metrics.inactive.length,
+            count: globalMetrics.inactive.length,
             icon: <Clock className="h-5 w-5 text-blue-500" />,
             color: "border-blue-100 bg-blue-50/50"
+        },
+        {
+            id: "reorder",
+            title: `Lembrar recomprar para ${globalMetrics.readyForReorder.length} clientes`,
+            desc: `${actionableMetrics.readyForReorder.length} com WhatsApp disponível`,
+            type: "reorder",
+            count: globalMetrics.readyForReorder.length,
+            icon: <TrendingUp className="h-5 w-5 text-indigo-500" />,
+            color: "border-indigo-100 bg-indigo-50/50"
         }
     ];
 
     const getRecommendedAction = (customer: GrowthCustomer) => {
-        const now = new Date();
-        const days = customer.last_purchase_date ? differenceInDays(now, parseISO(customer.last_purchase_date)) : 999;
+        const segment = customer.rfm_segment || blingApi.calculateRFMSegment(customer.total_orders, customer.ltv || customer.total_spent, customer.last_purchase_date);
 
-        if (days > 60) return "Enviar cupom de reativação";
-        if (customer.total_orders === 1) return "Oferecer desconto p/ 2ª compra";
-        if (customer.ltv > 500) return "Apresentar nova coleção VIP";
-        if (days > 30) return "Perguntar se gostou do último pedido";
+        if (segment === 'perdido') return "Enviar cupom de reativação agressivo";
+        if (segment === 'em_risco') return "Lembrar do último pedido e oferecer cupom";
+        if (segment === 'novo') return "Oferecer desconto exclusivo p/ 2ª compra";
+        if (segment === 'vip' || segment === 'campeao') return "Apresentar nova coleção exclusiva / Lista VIP";
         return "Manter relacionamento";
     };
 
     const filteredList = useMemo(() => {
         if (activeSegment === "all") return customers.slice(0, 10);
-        if (activeSegment === "risk") return metrics.inRisk;
-        if (activeSegment === "vip") return metrics.vip;
-        if (activeSegment === "news") return metrics.news;
-        if (activeSegment === "reorder") return metrics.readyForReorder;
+        if (activeSegment === "em_risco") return actionableMetrics.inRisk;
+        if (activeSegment === "vip") return actionableMetrics.vip;
+        if (activeSegment === "novo") return actionableMetrics.news;
+        if (activeSegment === "perdido") return actionableMetrics.inactive;
+        if (activeSegment === "reorder") return actionableMetrics.readyForReorder;
         return customers.slice(0, 10);
-    }, [activeSegment, customers, metrics]);
+    }, [activeSegment, customers, actionableMetrics]);
 
     const handleSegmentClick = (segment: string) => {
         setActiveSegment(segment);
@@ -173,20 +178,25 @@ export const GrowthSmartActions = ({ customers: allCustomers, onFilterChange }: 
                 <Card
                     className={cn(
                         "cursor-pointer transition-all hover:shadow-md border-l-4 border-l-red-500",
-                        activeSegment === "risk" && "ring-2 ring-red-500 ring-offset-2"
+                        activeSegment === "em_risco" && "ring-2 ring-red-500 ring-offset-2"
                     )}
-                    onClick={() => handleSegmentClick("risk")}
+                    onClick={() => handleSegmentClick("em_risco")}
                 >
                     <CardContent className="pt-6">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Em Risco</p>
-                                <h3 className="text-3xl font-bold mt-1">{metrics.inRisk.length}</h3>
+                                <h3 className="text-3xl font-bold mt-1">{globalMetrics.inRisk.length}</h3>
                             </div>
                             <div className="bg-red-50 p-2 rounded-lg">
                                 <AlertTriangle className="h-6 w-6 text-red-500" />
                             </div>
                         </div>
+                        {actionableMetrics.inRisk.length < globalMetrics.inRisk.length && (
+                            <p className="text-[10px] text-red-400 mt-2 font-medium">
+                                {actionableMetrics.inRisk.length} com WhatsApp
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -201,32 +211,42 @@ export const GrowthSmartActions = ({ customers: allCustomers, onFilterChange }: 
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Clientes VIP</p>
-                                <h3 className="text-3xl font-bold mt-1">{metrics.vip.length}</h3>
+                                <h3 className="text-3xl font-bold mt-1">{globalMetrics.vip.length}</h3>
                             </div>
                             <div className="bg-emerald-50 p-2 rounded-lg">
                                 <Star className="h-6 w-6 text-emerald-500" />
                             </div>
                         </div>
+                        {actionableMetrics.vip.length < globalMetrics.vip.length && (
+                            <p className="text-[10px] text-emerald-400 mt-2 font-medium">
+                                {actionableMetrics.vip.length} com WhatsApp
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
 
                 <Card
                     className={cn(
                         "cursor-pointer transition-all hover:shadow-md border-l-4 border-l-amber-500",
-                        activeSegment === "news" && "ring-2 ring-amber-500 ring-offset-2"
+                        activeSegment === "novo" && "ring-2 ring-amber-500 ring-offset-2"
                     )}
-                    onClick={() => handleSegmentClick("news")}
+                    onClick={() => handleSegmentClick("novo")}
                 >
                     <CardContent className="pt-6">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Novos</p>
-                                <h3 className="text-3xl font-bold mt-1">{metrics.news.length}</h3>
+                                <h3 className="text-3xl font-bold mt-1">{globalMetrics.news.length}</h3>
                             </div>
                             <div className="bg-amber-50 p-2 rounded-lg">
                                 <PlusCircle className="h-6 w-6 text-amber-500" />
                             </div>
                         </div>
+                        {actionableMetrics.news.length < globalMetrics.news.length && (
+                            <p className="text-[10px] text-amber-400 mt-2 font-medium">
+                                {actionableMetrics.news.length} com WhatsApp
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -241,12 +261,17 @@ export const GrowthSmartActions = ({ customers: allCustomers, onFilterChange }: 
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Prontos p/ Recompra</p>
-                                <h3 className="text-3xl font-bold mt-1">{metrics.readyForReorder.length}</h3>
+                                <h3 className="text-3xl font-bold mt-1">{globalMetrics.readyForReorder.length}</h3>
                             </div>
                             <div className="bg-blue-50 p-2 rounded-lg">
                                 <TrendingUp className="h-6 w-6 text-blue-500" />
                             </div>
                         </div>
+                        {actionableMetrics.readyForReorder.length < globalMetrics.readyForReorder.length && (
+                            <p className="text-[10px] text-blue-400 mt-2 font-medium">
+                                {actionableMetrics.readyForReorder.length} com WhatsApp
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -254,9 +279,14 @@ export const GrowthSmartActions = ({ customers: allCustomers, onFilterChange }: 
             {/* BLOCO 2: AÇÕES PRIORITÁRIAS DO DIA */}
             <Card className="border shadow-sm overflow-hidden bg-gradient-to-br from-white to-gray-50/50">
                 <CardHeader className="bg-white border-b pb-4">
-                    <div className="flex items-center gap-2">
-                        <Zap className="h-5 w-5 text-primary fill-primary/20" />
-                        <CardTitle className="text-lg font-semibold">O que fazer hoje</CardTitle>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Zap className="h-5 w-5 text-primary fill-primary/20" />
+                            <CardTitle className="text-lg font-semibold">O que fazer hoje</CardTitle>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] text-gray-400 border-gray-100">
+                            Exibindo apenas clientes com WhatsApp
+                        </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -319,7 +349,7 @@ export const GrowthSmartActions = ({ customers: allCustomers, onFilterChange }: 
                                                 <h4 className="font-bold text-gray-900 group-hover:text-primary transition-colors">{customer.name}</h4>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <Badge variant="outline" className="text-[10px] font-medium uppercase tracking-tight py-0">
-                                                        {customer.rfm_segment || 'S/ Segmento'}
+                                                        {customer.rfm_segment || blingApi.calculateRFMSegment(customer.total_orders, customer.ltv || customer.total_spent, customer.last_purchase_date)}
                                                     </Badge>
                                                     {customer.last_purchase_date && (
                                                         <span className="text-[11px] text-gray-400 flex items-center gap-1">

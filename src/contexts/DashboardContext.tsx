@@ -7,6 +7,7 @@ import { Compra, FluxoCaixaMensal, ResumoExecutivo, CalendarioCompra } from '@/t
 import { blingApi } from '@/lib/blingApi';
 import { getCurrentMonthKey } from '@/types/financial';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 
 interface ActualMetrics {
   valor_total: number;
@@ -52,6 +53,7 @@ interface DashboardContextType {
   brandMetrics: any[];
   brandMetricsAllTime: any[];
   productMetrics: any[];
+  productMetricsAllTime: any[];
   loadingRealTime: boolean;
   loadingWeekly: boolean;
   startDate: string;
@@ -64,6 +66,9 @@ interface DashboardContextType {
   weeklyMetrics: any;
   refreshWeeklyMetrics: () => Promise<void>;
   isSyncing: boolean;
+  syncPlanningWithActuals: () => void;
+  data: any;
+  planejamentoLoading: boolean;
 }
 
 const DashboardContext = createContext<DashboardContextType | null>(null);
@@ -136,17 +141,48 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     // Calcular tickets médios reais
     const categories = ['menina', 'menino', 'bebe', 'sapatos', 'total'] as const;
     categories.forEach(cat => {
-      if (actualMetrics[cat] && actualMetrics[cat].qtd_pecas > 0) {
+      if (actualMetrics[cat].qtd_pecas > 0) {
         actualMetrics[cat].ticket_medio = actualMetrics[cat].valor_total / actualMetrics[cat].qtd_pecas;
       }
     });
   }
+
+  const syncPlanningWithActuals = useCallback(() => {
+    if (!actualMetrics.total.valor_total) {
+      toast({
+        title: "Nada para sincronizar",
+        description: "Não foram encontradas compras cadastradas para este ciclo.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // 1. Atualizar Investimento do Ciclo
+    updateField('investimento_ciclo', actualMetrics.total.valor_total);
+
+    // 2. Atualizar Percentuais de Gênero
+    const totalV = actualMetrics.total.valor_total;
+    updateField('perc_menina', Math.round((actualMetrics.menina.valor_total / totalV) * 100));
+    updateField('perc_menino', Math.round((actualMetrics.menino.valor_total / totalV) * 100));
+    updateField('perc_bebe', Math.round((actualMetrics.bebe.valor_total / totalV) * 100));
+
+    // 3. Atualizar Tickets Médios
+    if (actualMetrics.menina.qtd_pecas > 0) updateField('tm_menina', Math.round(actualMetrics.menina.ticket_medio));
+    if (actualMetrics.menino.qtd_pecas > 0) updateField('tm_menino', Math.round(actualMetrics.menino.ticket_medio));
+    if (actualMetrics.bebe.qtd_pecas > 0) updateField('tm_bebe', Math.round(actualMetrics.bebe.ticket_medio));
+
+    toast({
+      title: "Sincronização Concluída",
+      description: "As metas foram atualizadas com base nas compras reais.",
+    });
+  }, [actualMetrics, updateField]);
 
   // --- Lógica de Dados Reais do Bling ---
   const [realTimeMetrics, setRealTimeMetrics] = useState<any | null>(null);
   const [brandMetrics, setBrandMetrics] = useState<any[]>([]);
   const [brandMetricsAllTime, setBrandMetricsAllTime] = useState<any[]>([]);
   const [productMetrics, setProductMetrics] = useState<any[]>([]);
+  const [productMetricsAllTime, setProductMetricsAllTime] = useState<any[]>([]);
   const [loadingRealTime, setLoadingRealTime] = useState(false);
   const [loadingWeekly, setLoadingWeekly] = useState(false);
   const [weeklyMetrics, setWeeklyMetrics] = useState<any>(null);
@@ -243,10 +279,14 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const fetchAllTimeMetrics = useCallback(async () => {
     if (!userId) return;
     try {
-      const brands = await blingApi.getSalesByBrand(); // Sem parâmetros = todo o período
+      const [brands, products] = await Promise.all([
+        blingApi.getSalesByBrand(),
+        blingApi.getSalesByProduct()
+      ]);
       setBrandMetricsAllTime(brands);
+      setProductMetricsAllTime(products);
     } catch (error) {
-      console.error('Erro ao carregar métricas de marcas (todo o período):', error);
+      console.error('Erro ao carregar métricas (todo o período):', error);
     }
   }, [userId]);
 
@@ -334,6 +374,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       realTimeMetrics,
       brandMetrics,
       productMetrics,
+      productMetricsAllTime,
       brandMetricsAllTime,
       loadingRealTime,
       loadingWeekly,
@@ -347,6 +388,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       weeklyMetrics,
       refreshWeeklyMetrics: fetchWeeklyMetrics,
       isSyncing,
+      syncPlanningWithActuals,
+      data,
+      planejamentoLoading,
     }}>
       {children}
     </DashboardContext.Provider>

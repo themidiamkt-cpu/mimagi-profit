@@ -1,9 +1,11 @@
-import { Users } from 'lucide-react';
+import { Users, RefreshCw } from 'lucide-react';
 import { SectionCard } from '../SectionCard';
 import { InputField } from '../InputField';
 import { DonutChart } from '../DonutChart';
 import { PlanejamentoFinanceiro, CalculatedValues } from '@/types/financial';
 import { formatCurrency, formatPercent } from '@/utils/formatters';
+import { Button } from '@/components/ui/button';
+import { useDashboardContext } from '@/contexts/DashboardContext';
 
 interface Props {
   data: PlanejamentoFinanceiro;
@@ -12,6 +14,7 @@ interface Props {
 }
 
 export function DistribuicaoPublico({ data, calculated, updateField }: Props) {
+  const { syncPlanningWithActuals } = useDashboardContext();
   const somaPublico = data.perc_menina + data.perc_menino + data.perc_bebe;
   const isValid = Math.abs(somaPublico - 100) < 0.01;
 
@@ -22,7 +25,21 @@ export function DistribuicaoPublico({ data, calculated, updateField }: Props) {
   ];
 
   return (
-    <SectionCard title="2. DISTRIBUIÇÃO POR PÚBLICO" icon={<Users className="w-5 h-5" />}>
+    <SectionCard
+      title="2. DISTRIBUIÇÃO POR PÚBLICO"
+      icon={<Users className="w-5 h-5" />}
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={syncPlanningWithActuals}
+          className="gap-2 text-primary border-primary/20 hover:bg-primary/5"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Sincronizar com Compras
+        </Button>
+      }
+    >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
           <div className="grid grid-cols-3 gap-4 mb-4">
@@ -51,7 +68,7 @@ export function DistribuicaoPublico({ data, calculated, updateField }: Props) {
               max={100}
             />
           </div>
-          
+
           {!isValid && (
             <div className="alert-warning mb-4">
               <p className="text-sm">A soma dos percentuais é <strong>{formatPercent(somaPublico)}</strong>. Deve ser 100%.</p>

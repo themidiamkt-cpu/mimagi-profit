@@ -32,7 +32,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (!roleLoading && !isAdmin) {
-      navigate('/variaveis', { replace: true });
+      navigate('/visao', { replace: true });
     }
   }, [isAdmin, roleLoading, navigate]);
 

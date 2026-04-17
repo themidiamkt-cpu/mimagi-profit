@@ -11,16 +11,16 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const { signIn } = useAuthContext();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = location.state?.from?.pathname || '/variaveis';
+  const from = location.state?.from?.pathname || '/visao';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email.trim() || !password.trim()) return;
 
     setIsLoading(true);
@@ -28,7 +28,7 @@ export default function Login() {
     setIsLoading(false);
 
     if (result.success) {
-      navigate(from, { replace: true });
+      navigate('/visao', { replace: true });
     }
   };
 
@@ -44,7 +44,7 @@ export default function Login() {
           <CardTitle className="text-2xl font-medium">MIMAGI Profit Planner</CardTitle>
           <CardDescription>Entre na sua conta para acessar seu planejamento</CardDescription>
         </CardHeader>
-        
+
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -59,7 +59,7 @@ export default function Login() {
                 disabled={isLoading}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
               <Input
@@ -73,7 +73,7 @@ export default function Login() {
               />
             </div>
           </CardContent>
-          
+
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
@@ -85,7 +85,7 @@ export default function Login() {
                 'Entrar'
               )}
             </Button>
-            
+
             <p className="text-sm text-muted-foreground text-center">
               Não tem uma conta?{' '}
               <Link to="/cadastro" className="text-accent hover:underline font-medium">

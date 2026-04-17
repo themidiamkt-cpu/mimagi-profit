@@ -324,7 +324,14 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
                         {compra.is_sapatos && <span className="text-[10px] font-bold uppercase text-accent"> Sapatos</span>}
                       </div>
                     </td>
-                    <td className="text-right font-mono">{compra.qtd_pecas || 0}</td>
+                    <td className="text-right">
+                      <input
+                        type="number"
+                        className="w-16 px-1 py-0.5 border border-border bg-transparent font-mono text-right text-sm"
+                        value={compra.qtd_pecas || 0}
+                        onChange={(e) => updateCompra(compra.id, { qtd_pecas: Number(e.target.value) || 0 })}
+                      />
+                    </td>
                     <td className="font-mono">{formatCurrency(compra.valor_total)}</td>
                     <td className="text-center">{compra.num_entregas}</td>
                     <td className="font-mono text-primary font-medium">{formatCurrency(info.valorPorParcela)}</td>

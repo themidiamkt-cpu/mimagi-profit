@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,13 +86,12 @@ interface CustomerPurchaseOrder {
 }
 
 const RFM_LEGEND = [
-  { key: 'campeao', label: '🏆 Campeão', desc: 'Clientes de alto valor: compram muito, gastam bem e compraram recentemente.' },
-  { key: 'leal', label: '💎 Leal', desc: 'Clientes fiéis: compram com frequência e possuem bom ticket médio.' },
-  { key: 'recorrente', label: '🔄 Recorrente', desc: 'Clientes que compram com constância na loja.' },
-  { key: 'novo', label: '✨ Novo', desc: 'Clientes que fizeram sua primeira compra recentemente.' },
-  { key: 'em_risco', label: '⚠️ Em Risco', desc: 'Clientes que não compram há algum tempo e podem estar parando.' },
-  { key: 'perdido', label: '💤 Perdido', desc: 'Clientes que não compram há mais de 1 ano.' },
-  { key: 'vip', label: '👑 VIP', desc: 'Segmentação manual para clientes de prestígio.' },
+  { key: 'campeao', label: '🏆 Campeão', desc: 'Melhores clientes: Recentes, frequentes e alto valor.' },
+  { key: 'vip', label: '💎 VIP', desc: 'Clientes fiéis com alto gasto total (+R$ 1.500).' },
+  { key: 'recorrente', label: '🔄 Recorrente', desc: 'Compram com frequência e estão ativos.' },
+  { key: 'novo', label: '✨ Novo', desc: 'Primeira compra nos últimos 30 dias.' },
+  { key: 'em_risco', label: '⚠️ Em Risco', desc: 'Não compram há mais de 30 dias.' },
+  { key: 'perdido', label: '💤 Perdido', desc: 'Não compram há mais de 60 dias.' },
 ];
 
 const SIZES = ["RN", "P", "M", "G", "GG", "1", "2", "3", "4", "6", "8", "10", "12", "14", "16"];
@@ -135,9 +134,7 @@ export const GrowthCustomers = () => {
     current_size: "",
   });
 
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
+  const [activeTab, setActiveTab] = useState("list");
 
   useEffect(() => {
     // Busca todos os filhos ao carregar a tela
@@ -161,6 +158,7 @@ export const GrowthCustomers = () => {
       }
     };
     fetchLojas();
+    fetchCustomers();
   }, []);
 
   const fetchLiveMetrics = async (customerList: GrowthCustomer[]) => {
@@ -359,6 +357,12 @@ export const GrowthCustomers = () => {
       if (error) throw error;
       toast.success(editingCustomer ? "Responsável atualizado com sucesso!" : "Responsável cadastrado com sucesso!");
       setIsDialogOpen(false);
+
+      // Gatilho para atualizar métricas e segmentos persistentes no banco
+      if (user?.id) {
+        blingApi.recalculateRFM().catch(console.error);
+      }
+
       setFormData({ name: "", email: "", phone: "", cpf: "", city: "" });
       setEditingCustomer(null);
       fetchCustomers();
@@ -594,7 +598,7 @@ export const GrowthCustomers = () => {
   const getSegmentColor = (segment: string) => {
     switch (segment?.toLowerCase()) {
       case 'campeao': return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'leal': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'vip': return 'bg-purple-100 text-purple-800 border-purple-200';
       case 'recorrente': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'novo': return 'bg-sky-100 text-sky-800 border-sky-200';
       case 'em_risco': return 'bg-orange-100 text-orange-800 border-orange-200';
@@ -606,12 +610,11 @@ export const GrowthCustomers = () => {
   const getSegmentLabel = (segment: string) => {
     switch (segment?.toLowerCase()) {
       case 'campeao': return '🏆 Campeão';
-      case 'leal': return '💎 Leal';
+      case 'vip': return '💎 VIP';
       case 'recorrente': return '🔄 Recorrente';
       case 'novo': return '✨ Novo';
       case 'em_risco': return '⚠️ Em Risco';
       case 'perdido': return '💤 Perdido';
-      case 'vip': return '👑 VIP';
       default: return segment || 'Sem Segmento';
     }
   };
@@ -619,16 +622,24 @@ export const GrowthCustomers = () => {
   const getResolvedCustomerMetrics = (customer: GrowthCustomer) => {
     const liveMetric = liveMetricsByCustomerId[customer.id];
 
+    const totalOrders = liveMetric?.totalOrders ?? Number(customer.total_orders || 0);
+    const ltv = liveMetric?.ltv ?? Number(customer.ltv || 0);
+    const lastPurchaseDate = liveMetric?.lastPurchaseDate ?? customer.last_purchase_date ?? null;
+
+    // Cálculo dinâmico do segmento (Regra Mimagi Kids)
+    const segment = blingApi.calculateRFMSegment(totalOrders, ltv, lastPurchaseDate);
+
     return {
-      totalOrders: liveMetric?.totalOrders ?? Number(customer.total_orders || 0),
+      totalOrders,
       totalSpent: liveMetric?.totalSpent ?? Number(customer.total_spent || 0),
       ticketMedio: liveMetric?.ticketMedio ?? Number(customer.ticket_medio || 0),
-      ltv: liveMetric?.ltv ?? Number(customer.ltv || 0),
+      ltv,
       ltvProfit: liveMetric?.ltvProfit ?? (Number(customer.ltv || 0) * 0.3),
-      lastPurchaseDate: liveMetric?.lastPurchaseDate ?? customer.last_purchase_date ?? null,
+      lastPurchaseDate,
       averageFrequency: liveMetric?.averageFrequency ?? 0,
       retentionMonths: liveMetric?.retentionMonths ?? 0,
       hasLiveMetric: Boolean(liveMetric),
+      segment
     };
   };
 
@@ -644,19 +655,35 @@ export const GrowthCustomers = () => {
     return acc;
   }, { orders: 0, lines: 0, units: 0, total: 0 });
 
-  const filteredCustomers = customers
+  const resolvedCustomers = useMemo(() => {
+    return customers.map(c => {
+      const metrics = getResolvedCustomerMetrics(c);
+      return {
+        ...c,
+        total_orders: metrics.totalOrders,
+        total_spent: metrics.totalSpent,
+        ltv: metrics.ltv,
+        last_purchase_date: metrics.lastPurchaseDate,
+        rfm_segment: metrics.segment
+      };
+    });
+  }, [customers, liveMetricsByCustomerId]);
+
+  const filteredCustomers = resolvedCustomers
     .filter((c) => {
       const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.phone?.includes(searchTerm) ||
         c.cpf?.includes(searchTerm);
 
+      const segmentValue = c.rfm_segment.toLowerCase();
       const matchesSegment = selectedSegment === "all" ||
-        c.rfm_segment?.toLowerCase() === selectedSegment.toLowerCase();
+        segmentValue === selectedSegment.toLowerCase() ||
+        (selectedSegment === "vip" && (segmentValue === "vip" || segmentValue === "campeao"));
 
       return matchesSearch && matchesSegment;
     })
-    .sort((a, b) => getResolvedCustomerMetrics(b).ltv - getResolvedCustomerMetrics(a).ltv);
+    .sort((a, b) => b.ltv - a.ltv);
 
   const handleRecalculateRFM = async () => {
     try {
@@ -712,7 +739,7 @@ export const GrowthCustomers = () => {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="list" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex items-center justify-between mb-6">
           <TabsList className="bg-white border border-gray-100 p-1 rounded-xl h-11">
             <TabsTrigger value="list" className="rounded-lg px-6 data-[state=active]:bg-gray-50 data-[state=active]:shadow-none font-medium">
@@ -727,7 +754,13 @@ export const GrowthCustomers = () => {
         </div>
 
         <TabsContent value="actions" className="mt-0 border-none p-0 focus-visible:ring-0">
-          <GrowthSmartActions customers={customers} />
+          <GrowthSmartActions
+            customers={resolvedCustomers}
+            onFilterChange={(segment) => {
+              setSelectedSegment(segment);
+              setActiveTab("list");
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="list" className="mt-0 border-none p-0 focus-visible:ring-0 space-y-6">
@@ -1113,8 +1146,8 @@ export const GrowthCustomers = () => {
                             </span>
                           )}
                         </div>
-                        <Badge variant="outline" className={cn("text-[11px] py-0 px-2 h-6 border font-medium rounded-full", getSegmentColor(customer.rfm_segment))}>
-                          {getSegmentLabel(customer.rfm_segment)}
+                        <Badge variant="outline" className={cn("text-[11px] py-0 px-2 h-6 border font-medium rounded-full", getSegmentColor(resolvedMetrics.segment))}>
+                          {getSegmentLabel(resolvedMetrics.segment)}
                         </Badge>
                       </div>
                       {customer.phone && (

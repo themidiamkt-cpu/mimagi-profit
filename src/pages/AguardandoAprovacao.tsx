@@ -14,7 +14,7 @@ export default function AguardandoAprovacao() {
 
   useEffect(() => {
     if (isApproved) {
-      navigate('/variaveis', { replace: true });
+      navigate('/visao', { replace: true });
     }
   }, [isApproved, navigate]);
 
@@ -56,33 +56,33 @@ export default function AguardandoAprovacao() {
             </p>
           </div>
         </CardHeader>
-        
+
         <CardContent className="space-y-4">
           <p className="text-muted-foreground">
             Seu acesso está sendo analisado pelo administrador. Assim que for aprovado, você poderá acessar a plataforma normalmente.
           </p>
-          
+
           <div className="bg-muted/50 rounded-lg p-4 text-sm">
             <p className="font-medium mb-1">Informações do cadastro:</p>
             <p className="text-muted-foreground">Loja: {profile?.nome_loja || '-'}</p>
             <p className="text-muted-foreground">Email: {profile?.email || '-'}</p>
           </div>
         </CardContent>
-        
+
         <CardFooter className="flex flex-col gap-3">
-          <Button 
-            onClick={handleRefresh} 
-            variant="outline" 
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
             className="w-full"
             disabled={loading || isRefreshing}
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Verificar status
           </Button>
-          
-          <Button 
-            onClick={handleLogout} 
-            variant="ghost" 
+
+          <Button
+            onClick={handleLogout}
+            variant="ghost"
             className="w-full text-muted-foreground"
           >
             <LogOut className="w-4 h-4 mr-2" />

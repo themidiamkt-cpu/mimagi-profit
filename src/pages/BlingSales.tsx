@@ -182,9 +182,8 @@ export function BlingSales() {
                 setBlingActive(true);
             }
 
-            if (localPedidos.length === 0) {
-                toast.info('Cache vazio. Clique em "Sincronizar do Bling" para importar os dados.', { duration: 6000 });
-            }
+            // Removido toast de cache vazio para evitar poluição visual e confusão
+            // quando há dados parciais ou filtros ativos.
         } catch (error: any) {
             toast.error('Erro ao carregar cache local: ' + (error.message || 'Erro desconhecido'));
         } finally {
@@ -513,7 +512,7 @@ export function BlingSales() {
                         </TabsList>
 
                         <TabsContent value="dashboard" className="space-y-6">
-                            <BlingDashboard metrics={metrics} />
+                            <BlingDashboard metrics={metrics} pedidos={pedidos} />
                         </TabsContent>
 
                         <TabsContent value="vendas" className="mt-6">

@@ -1,6 +1,7 @@
-import { Receipt } from 'lucide-react';
+import { Receipt, RefreshCw } from 'lucide-react';
 import { SectionCard } from '../SectionCard';
 import { InputField } from '../InputField';
+import { Button } from '@/components/ui/button';
 import { PlanejamentoFinanceiro, CalculatedValues } from '@/types/financial';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 
@@ -13,9 +14,23 @@ interface Props {
 }
 
 export function TicketMedio({ data, calculated, updateField }: Props) {
-  const { actualMetrics } = useDashboardContext();
+  const { actualMetrics, syncPlanningWithActuals } = useDashboardContext();
   return (
-    <SectionCard title="6. TICKET MÉDIO E QUANTIDADE DE PEÇAS" icon={<Receipt className="w-5 h-5" />}>
+    <SectionCard
+      title="6. TICKET MÉDIO E QUANTIDADE DE PEÇAS"
+      icon={<Receipt className="w-5 h-5" />}
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={syncPlanningWithActuals}
+          className="gap-2 text-primary border-primary/20 hover:bg-primary/5"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Sincronizar com Compras
+        </Button>
+      }
+    >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <InputField
           label="Ticket Médio Menina"
