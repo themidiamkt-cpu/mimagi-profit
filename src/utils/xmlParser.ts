@@ -35,7 +35,7 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
         getElementValue("//emit/xFant") || getElementValue("//emit/xNome");
 
     if (marca) {
-        marca = marca.replace(/CONFECCOES|LTDA|S\/A|EIRELI|ME|EPP|IMPORTACAO|EXPORTACAO/gi, '').trim();
+        marca = marca.replace(/CONFECCOES|LTDA|S\/A|EIRELI|ME|EPP|IMPORTACAO|EXPORTACAO/gi, '').replace(/\.$/, '').trim();
     }
 
     // 2. Valor Total
@@ -46,29 +46,28 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
     const dhEmi = getElementValue("//nfe:ide/nfe:dhEmi") || getElementValue("//ide/dhEmi") || getElementValue("//nfe:ide/nfe:dEmi") || getElementValue("//ide/dEmi");
     const dataEmissao = dhEmi ? dhEmi.substring(0, 10) : new Date().toISOString().substring(0, 10);
 
-    // 4. Quantidade de Peças (Soma de qCom)
+    // 4. Quantidade de Peças (Soma de qCom apenas para vestuário/calçados)
+    // NCMs de vestuário começam com 61, 62, 63 e calçados com 64. 
+    // Outros NCMs como 48 (papel/sacolas) ou 39 (plástico) são ignorados na contagem de peças.
     let qtdPecas = 0;
-    const itensResult = xmlDoc.evaluate("//nfe:det/nfe:prod/nfe:qCom", xmlDoc, nsResolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
-    let itemNode = itensResult.iterateNext();
+    const items = xmlDoc.getElementsByTagName("det");
 
-    if (!itemNode) {
-        const fallbackItens = xmlDoc.evaluate("//det/prod/qCom", xmlDoc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
-        itemNode = fallbackItens.iterateNext();
-    }
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const ncm = item.getElementsByTagName("NCM")[0]?.textContent || "";
+        const qCom = parseFloat(item.getElementsByTagName("qCom")[0]?.textContent || "0");
 
-    while (itemNode) {
-        qtdPecas += parseFloat(itemNode.textContent || '0');
-        // @ts-ignore
-        itemNode = itensResult.iterateNext();
-    }
+        // Verifica se o NCM pertence a categorias de vestuário, acessórios de moda ou calçados
+        const isVestuario = ncm.startsWith("61") || ncm.startsWith("62") || ncm.startsWith("63") ||
+            ncm.startsWith("64") || ncm.startsWith("65") || ncm.startsWith("42");
 
-    // Se XPath falhou, tenta getElementsByTagName
-    if (qtdPecas === 0) {
-        const qComNodes = xmlDoc.getElementsByTagName("qCom");
-        for (let i = 0; i < qComNodes.length; i++) {
-            qtdPecas += parseFloat(qComNodes[i].textContent || '0');
+        if (isVestuario) {
+            qtdPecas += qCom;
         }
     }
+
+    // Se após o filtro a quantidade for 0, mas existirem itens, talvez os NCMs sejam variados.
+    // Em último caso, se não houver NCMs de vestuário, mantemos 0 para não confundir papelaria com roupa.
 
     // 5. Parcelas (dup)
     const parcelas: ParsedNfe['parcelas'] = [];

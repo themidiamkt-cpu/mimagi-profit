@@ -131,7 +131,9 @@ export function XMLImportDialog({ open, onOpenChange, onConfirm }: Props) {
                                         </div>
                                         <div className="p-3 bg-background border border-border">
                                             <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Qtd. Peças</p>
-                                            <p className="text-sm font-bold text-accent">{parsedData.qtdPecas}</p>
+                                            <p className={`text-sm font-bold ${parsedData.qtdPecas === 0 ? 'text-muted-foreground' : 'text-accent'}`}>
+                                                {parsedData.qtdPecas}
+                                            </p>
                                         </div>
                                         <div className="p-3 bg-background border border-border">
                                             <p className="text-[10px] text-muted-foreground uppercase   tracking-wider mb-1">Parcelamento</p>
@@ -187,8 +189,13 @@ export function XMLImportDialog({ open, onOpenChange, onConfirm }: Props) {
                                             <p className="font-bold text-accent mb-1 uppercase tracking-wider">Aviso de Importação</p>
                                             <p className="text-muted-foreground leading-relaxed">
                                                 A compra será cadastrada como **1 única entrega** na data de emissão da nota.
-                                                As parcelas do sistema serão recalculadas com base no prazo de **{parsedData.prazoEstimado} dias** para manter a consistência do fluxo de caixa planejado.
+                                                As parcelas do sistema serão recalculadas com base no prazo de **{parsedData.prazoEstimado} dias**.
                                             </p>
+                                            {parsedData.qtdPecas === 0 && (
+                                                <p className="text-amber-600 font-medium mt-2">
+                                                    ⚠️ Nota: Esta NF parece conter apenas embalagens ou itens não computados como peças de estoque.
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
