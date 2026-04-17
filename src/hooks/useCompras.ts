@@ -57,6 +57,7 @@ export function useCompras(
           data_entrega_4: c.data_entrega_4,
           is_sapatos: !!c.is_sapatos,
           qtd_pecas: Number(c.qtd_pecas) || 0,
+          chave_nfe: c.chave_nfe,
           created_at: c.created_at,
           updated_at: c.updated_at,
         })));
@@ -92,7 +93,12 @@ export function useCompras(
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('Esta Nota Fiscal (XML) já foi importada anteriormente.');
+        }
+        throw error;
+      }
 
       if (data) {
         const newCompra: Compra = {
@@ -110,6 +116,7 @@ export function useCompras(
           data_entrega_4: data.data_entrega_4,
           is_sapatos: !!data.is_sapatos,
           qtd_pecas: Number(data.qtd_pecas) || 0,
+          chave_nfe: data.chave_nfe,
           created_at: data.created_at,
           updated_at: data.updated_at,
         };

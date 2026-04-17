@@ -10,6 +10,7 @@ export interface ParsedNfe {
     prazoEstimado: number;
     qtdPecas: number;
     numParcelas: number;
+    chaveNfe: string | null;
 }
 
 export function parseNfeXml(xmlString: string): ParsedNfe {
@@ -121,6 +122,15 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
 
     const numParcelas = parcelas.length || 1;
 
+    // 6. Chave NFe (chNFe)
+    let chaveNfe = getElementValue("//nfe:infProt/nfe:chNFe") || getElementValue("//infProt/chNFe");
+    if (!chaveNfe) {
+        const infNfeId = xmlDoc.getElementsByTagName("infNFe")[0]?.getAttribute("Id");
+        if (infNfeId && infNfeId.startsWith("NFe")) {
+            chaveNfe = infNfeId.substring(3);
+        }
+    }
+
     return {
         marca,
         valorTotal,
@@ -128,6 +138,7 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
         parcelas,
         prazoEstimado,
         qtdPecas,
-        numParcelas
+        numParcelas,
+        chaveNfe
     };
 }

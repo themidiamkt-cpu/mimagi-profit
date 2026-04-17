@@ -64,6 +64,7 @@ export function XMLImportDialog({ open, onOpenChange, onConfirm }: Props) {
             data_entrega_1: parsedData.dataEmissao, // Usa emissão como base
             categoria: 'menina', // Default
             qtd_pecas: parsedData.qtdPecas,
+            chave_nfe: parsedData.chaveNfe,
         };
 
         onConfirm(novaCompra);

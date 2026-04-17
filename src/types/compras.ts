@@ -17,6 +17,7 @@ export interface Compra {
   data_entrega_4: string | null;
   is_sapatos: boolean;
   qtd_pecas: number;
+  chave_nfe?: string | null;
   created_at?: string;
   updated_at?: string;
 }
