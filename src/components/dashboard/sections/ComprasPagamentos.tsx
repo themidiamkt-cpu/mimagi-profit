@@ -6,6 +6,8 @@ import { Plus, Trash2, Package, Calendar, Eye, Truck, AlertTriangle } from 'luci
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { XMLImportDialog } from './XMLImportDialog';
+import { FileCode } from 'lucide-react';
 
 interface Props {
   compras: Compra[];
@@ -20,6 +22,7 @@ interface Props {
 export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, removeCompra, calcularCalendario, totalComprometido }: Props) {
   const [novaCompra, setNovaCompra] = useState<Omit<Compra, 'id'>>(defaultCompra);
   const [showForm, setShowForm] = useState(false);
+  const [showXmlImport, setShowXmlImport] = useState(false);
   const [calendarioModal, setCalendarioModal] = useState<CalendarioCompra | null>(null);
 
   const handleAddCompra = () => {
@@ -86,16 +89,37 @@ export function ComprasPagamentos({ compras, saving, addCompra, updateCompra, re
         </div>
       </div>
 
-      {/* Botão adicionar */}
-      {!showForm && (
-        <Button
-          onClick={() => setShowForm(true)}
-          className="mb-6 bg-accent hover:bg-accent/90 text-accent-foreground"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Adicionar Compra
-        </Button>
-      )}
+      {/* Botões de ação */}
+      <div className="flex gap-2 mb-6">
+        {!showForm && (
+          <>
+            <Button
+              onClick={() => setShowForm(true)}
+              className="bg-accent hover:bg-accent/90 text-accent-foreground"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Adicionar Compra
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowXmlImport(true)}
+              className="border-accent text-accent hover:bg-accent/5"
+            >
+              <FileCode className="w-4 h-4 mr-2" />
+              Importar XML
+            </Button>
+          </>
+        )}
+      </div>
+
+      <XMLImportDialog
+        open={showXmlImport}
+        onOpenChange={setShowXmlImport}
+        onConfirm={(compra) => {
+          addCompra(compra);
+          setShowXmlImport(false);
+        }}
+      />
 
       {/* Formulário nova compra */}
       {showForm && (
