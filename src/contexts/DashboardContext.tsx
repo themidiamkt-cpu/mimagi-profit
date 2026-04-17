@@ -67,7 +67,6 @@ interface DashboardContextType {
   refreshWeeklyMetrics: () => Promise<void>;
   isSyncing: boolean;
   syncPlanningWithActuals: () => void;
-  data: any;
   planejamentoLoading: boolean;
 }
 
@@ -389,7 +388,6 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       refreshWeeklyMetrics: fetchWeeklyMetrics,
       isSyncing,
       syncPlanningWithActuals,
-      data,
       planejamentoLoading,
     }}>
       {children}
