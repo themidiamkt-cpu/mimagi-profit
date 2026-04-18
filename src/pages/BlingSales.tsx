@@ -953,8 +953,9 @@ export function BlingSales() {
                                     <div className="space-y-1">
                                         <p className="font-semibold text-gray-800">Crie um Aplicativo no Bling</p>
                                         <p className="text-sm text-gray-600 leading-relaxed">
-                                            Acesse <strong>Configurações {">"} Todas as Configurações {">"} Integrações {">"} Configurações de integração</strong> e clique em
-                                            "Incluir Integração". Escolha <strong>API V3</strong>.
+                                            Acesse o <a href="https://www.bling.com.br/cadastro.aplicativos.php#/list" target="_blank" rel="noopener noreferrer" className="text-primary underline font-bold">Portal de Aplicativos do Bling</a> e clique em "Incluir Aplicativo".
+                                            Ou siga pelo menu: Configurações {">"} Todas as Configurações {">"} Integrações {">"} Configurações de integração.
+                                            Escolha <strong>API V3</strong>.
                                         </p>
                                     </div>
                                 </div>
