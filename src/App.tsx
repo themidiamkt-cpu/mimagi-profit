@@ -82,6 +82,7 @@ const App = () => (
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
+            <Route path="/callback" element={<BlingCallback />} />
 
             {/* Pending approval route */}
             <Route path="/aguardando-aprovacao" element={<AguardandoAprovacao />} />

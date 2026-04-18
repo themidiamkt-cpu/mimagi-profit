@@ -18,7 +18,7 @@ export const blingApi = {
     connect: (customClientId?: string) => {
         // Fallbacks caso o .env não esteja configurado
         const clientId = customClientId || import.meta.env.VITE_BLING_CLIENT_ID || 'faff2861c0437caf6e9d433b2a84c3fe814e5ec7';
-        const redirectUri = import.meta.env.VITE_BLING_REDIRECT_URI || 'https://planejamentoloja.themidiamarketing.com.br/bling/callback';
+        const redirectUri = import.meta.env.VITE_BLING_REDIRECT_URI || `${window.location.origin}/callback`;
 
         console.log('Iniciando conexão Bling...', { clientId, redirectUri });
 

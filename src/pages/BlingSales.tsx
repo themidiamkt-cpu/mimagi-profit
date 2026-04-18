@@ -966,7 +966,7 @@ export function BlingSales() {
                                         <p className="text-sm text-gray-600 leading-relaxed">
                                             Nas configurações do aplicativo, defina a URL de Redirecionamento como:<br />
                                             <code className="bg-muted px-2 py-1 rounded text-xs text-primary font-mono select-all">
-                                                https://planejamentoloja.themidiamarketing.com.br/bling/callback
+                                                {window.location.origin}/callback
                                             </code>
                                         </p>
                                     </div>
@@ -1001,8 +1001,8 @@ export function BlingSales() {
                             </div>
                         </Card>
                     </div>
-                </TabsContent>
-            </Tabs>
+                </TabsContent >
+            </Tabs >
 
             <Dialog open={!!selectedCustomer} onOpenChange={() => setSelectedCustomer(null)}>
                 <DialogContent className="max-w-2xl">
@@ -1079,7 +1079,7 @@ export function BlingSales() {
                     ) : null}
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 }
 
