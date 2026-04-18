@@ -207,6 +207,15 @@ serve(async (req) => {
                     rawItens = Object.values(p.itens).filter(i => typeof i === 'object');
                 }
 
+                // Log do primeiro pedido para debug de mapeamento
+                if (totalFetched === pedidos.length && mappedRows === undefined) {
+                    console.log(`[SYNC] Exemplo de pedido mapeado para user ${user.id}:`, {
+                        id: p.id,
+                        numero: p.numero,
+                        user_id: user.id
+                    });
+                }
+
                 return {
                     id: p.id,
                     numero: String(p.numero || p.id),
@@ -233,20 +242,26 @@ serve(async (req) => {
 
             const { error: upsertError } = await supabase
                 .from('bling_pedidos')
-                .upsert(mappedRows, { onConflict: 'id', ignoreDuplicates: false });
+                .upsert(mappedRows, {
+                    onConflict: 'id',
+                    ignoreDuplicates: false
+                });
 
-            if (!upsertError) {
-                totalUpserted += mappedRows.length;
-                // CORREÇÃO 3: Salva o timestamp do ÚLTIMO pedido da página
-                const lastOrder = pedidos[pedidos.length - 1];
-                if (lastOrder && lastOrder.data) {
-                    lastProcessedDate = lastOrder.data;
-                    await supabase.from('bling_config').upsert({
-                        user_id: user.id,
-                        last_sync_at: lastProcessedDate,
-                        updated_at: new Date().toISOString()
-                    });
-                }
+            if (upsertError) {
+                console.error(`[SYNC ERROR] Falha no upsert da página ${currentPage}:`, upsertError);
+                throw new Error(`Erro ao salvar pedidos: ${upsertError.message}`);
+            }
+
+            totalUpserted += mappedRows.length;
+            // CORREÇÃO 3: Salva o timestamp do ÚLTIMO pedido da página
+            const lastOrder = pedidos[pedidos.length - 1];
+            if (lastOrder && lastOrder.data) {
+                lastProcessedDate = lastOrder.data;
+                await supabase.from('bling_config').upsert({
+                    user_id: user.id,
+                    last_sync_at: lastProcessedDate,
+                    updated_at: new Date().toISOString()
+                });
             }
 
             currentPage++;
