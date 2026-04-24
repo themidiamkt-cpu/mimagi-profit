@@ -110,9 +110,13 @@ const MLSettings = () => {
                 window.location.href = data.url;
             }
         } catch (error: any) {
+            let errorMsg = error.message;
+            if (error.context?.json?.error) {
+                errorMsg = `${error.context.json.error}: ${error.context.json.details || ''}`;
+            }
             toast({
                 title: "Erro ao gerar URL",
-                description: error.message,
+                description: errorMsg,
                 variant: "destructive",
             });
         } finally {
