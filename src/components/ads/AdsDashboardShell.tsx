@@ -67,17 +67,16 @@ export const AdsDashboardShell = ({
     try {
       const { data, error } = await supabase.functions.invoke(functionName, {
         method: "GET",
-        body: {},
         headers: { "x-path": "status" },
       });
       if (error) throw error;
       setConnected(!!data?.connected);
       setAccountLabel(
         data?.account_name ??
-          data?.advertiser_name ??
-          data?.account_id ??
-          data?.advertiser_id ??
-          "",
+        data?.advertiser_name ??
+        data?.account_id ??
+        data?.advertiser_id ??
+        "",
       );
     } catch (error: any) {
       console.error(error);
