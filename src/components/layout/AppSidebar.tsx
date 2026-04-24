@@ -13,7 +13,9 @@ import {
   Box,
   Settings2,
   ShoppingCart,
-  Tag
+  Tag,
+  Megaphone,
+  Music2
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -74,6 +76,24 @@ const integrationItems = [
     subItems: [
       { title: 'Dashboard', path: '/mercadolivre' },
       { title: 'Configurações', path: '/mercadolivre/configuracoes' },
+    ]
+  },
+  {
+    title: 'Meta Ads',
+    path: '/meta-ads',
+    icon: Megaphone,
+    subItems: [
+      { title: 'Dashboard', path: '/meta-ads' },
+      { title: 'Configurações', path: '/meta-ads/configuracoes' },
+    ]
+  },
+  {
+    title: 'TikTok Ads',
+    path: '/tiktok-ads',
+    icon: Music2,
+    subItems: [
+      { title: 'Dashboard', path: '/tiktok-ads' },
+      { title: 'Configurações', path: '/tiktok-ads/configuracoes' },
     ]
   },
 ];
