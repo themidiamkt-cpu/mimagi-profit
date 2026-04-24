@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,38 +6,121 @@ import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Eye, EyeOff, ExternalLink, CheckCircle2, AlertCircle, Loader2, ShieldAlert } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const MLSettings = () => {
     const { toast } = useToast();
     const [showSecret, setShowSecret] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [status, setStatus] = useState<"not_configured" | "saved" | "connected">("not_configured");
+    const [accountName, setAccountName] = useState("");
 
     const [formData, setFormData] = useState({
         appId: "",
         secretKey: "",
-        redirectUri: "https://seusite.com/mercadolivre/callback",
+        redirectUri: "",
     });
 
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                setIsLoading(true);
+
+                const { data: config, error: configError } = await supabase
+                    .from('ml_config')
+                    .select('*')
+                    .maybeSingle();
+
+                if (configError) throw configError;
+
+                if (config) {
+                    setFormData({
+                        appId: config.app_id?.toString() || "",
+                        secretKey: config.secret_key || "",
+                        redirectUri: config.redirect_uri || "",
+                    });
+                    setStatus("saved");
+                }
+
+                const { data: token } = await supabase
+                    .from('ml_tokens')
+                    .select('expires_at')
+                    .maybeSingle();
+
+                if (token) {
+                    setStatus("connected");
+                    setAccountName("Mimagi Kids");
+                }
+            } catch (error: any) {
+                console.error('Error fetching ML config:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchConfig();
+    }, []);
+
     const handleSave = async () => {
-        setIsLoading(true);
-        setTimeout(() => {
-            setIsLoading(false);
+        try {
+            setIsLoading(true);
+
+            const { data, error } = await supabase.functions.invoke('ml-integration', {
+                method: 'POST',
+                body: {
+                    app_id: parseInt(formData.appId),
+                    secret_key: formData.secretKey,
+                    redirect_uri: formData.redirectUri,
+                },
+                headers: {
+                    'x-path': 'config'
+                }
+            });
+
+            if (error) throw error;
+
             setStatus("saved");
             toast({
                 title: "Configurações salvas",
                 description: "Suas credenciais do Mercado Livre foram armazenadas.",
             });
-        }, 1000);
+        } catch (error: any) {
+            toast({
+                title: "Erro ao salvar",
+                description: error.message,
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleAuthorize = () => {
-        const state = Math.random().toString(36).substring(7);
-        const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${formData.appId}&redirect_uri=${encodeURIComponent(formData.redirectUri)}&state=${state}`;
-        window.open(authUrl, "_blank");
+    const handleAuthorize = async () => {
+        try {
+            setIsLoading(true);
+            const { data, error } = await supabase.functions.invoke('ml-integration', {
+                method: 'GET',
+                headers: {
+                    'x-path': 'auth-url'
+                }
+            });
+
+            if (error) throw error;
+            if (data?.url) {
+                window.location.href = data.url;
+            }
+        } catch (error: any) {
+            toast({
+                title: "Erro ao gerar URL",
+                description: error.message,
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleTestConnection = () => {
+    const handleTestConnection = async () => {
         setIsLoading(true);
         setTimeout(() => {
             setIsLoading(false);
