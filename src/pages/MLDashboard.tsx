@@ -14,6 +14,9 @@ interface DashboardData {
         pendingOrders: number;
         activeAds: number;
         visits: number;
+        adCost: number;
+        adSales: number;
+        acos: number;
         revenueGrowth: number;
         ordersGrowth: number;
     };
@@ -60,7 +63,6 @@ const MLDashboard = () => {
                 if (dashboardError) throw dashboardError;
                 setData(dashboardData);
             } else {
-                // Mock data for demonstration if not configured
                 setData({
                     summary: {
                         totalOrders: 0,
@@ -68,6 +70,9 @@ const MLDashboard = () => {
                         pendingOrders: 0,
                         activeAds: 0,
                         visits: 0,
+                        adCost: 0,
+                        adSales: 0,
+                        acos: 0,
                         revenueGrowth: 0,
                         ordersGrowth: 0
                     },
@@ -103,7 +108,7 @@ const MLDashboard = () => {
 
             toast({
                 title: "Sincronização concluída",
-                description: `Importados ${syncData.orders} pedidos e ${syncData.ads} anúncios.`,
+                description: `Importados ${syncData.orders} pedidos e ${syncData.ads} anúncios (incluindo métricas de Ads).`,
             });
 
             // Refresh data
@@ -164,7 +169,7 @@ const MLDashboard = () => {
                 </Alert>
             )}
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Total de Pedidos</CardTitle>
@@ -173,13 +178,13 @@ const MLDashboard = () => {
                     <CardContent>
                         <div className="text-2xl font-bold">{data?.summary.totalOrders || 0}</div>
                         <p className="text-xs text-muted-foreground">
-                            {data?.summary.ordersGrowth ? `+${data.summary.ordersGrowth}% este mês` : 'Sem dados'}
+                            Análise dos últimos 30 dias
                         </p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Receita do Mês</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Receita Bruta</CardTitle>
                         <TrendingUp className="h-4 w-4 text-yellow-500" />
                     </CardHeader>
                     <CardContent>
@@ -187,18 +192,18 @@ const MLDashboard = () => {
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data?.summary.revenue || 0)}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            {data?.summary.revenueGrowth ? `+${data.summary.revenueGrowth}% este mês` : 'Sem dados'}
+                            Pedidos pagos
                         </p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Pedidos Pendentes</CardTitle>
-                        <Clock className="h-4 w-4 text-yellow-500" />
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Visitas Totais</CardTitle>
+                        <Eye className="h-4 w-4 text-yellow-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{data?.summary.pendingOrders || 0}</div>
-                        <p className="text-xs text-muted-foreground">Aguardando envio</p>
+                        <div className="text-2xl font-bold">{data?.summary.visits.toLocaleString() || 0}</div>
+                        <p className="text-xs text-muted-foreground">Orgânico + Ads</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -208,17 +213,43 @@ const MLDashboard = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{data?.summary.activeAds || 0}</div>
-                        <p className="text-xs text-muted-foreground">Sincronizados</p>
+                        <p className="text-xs text-muted-foreground">Publicados no ML</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Visitas</CardTitle>
-                        <Eye className="h-4 w-4 text-yellow-500" />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+                <Card className="bg-yellow-50/50 border-yellow-100">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-yellow-800">Investimento Product Ads</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{data?.summary.visits.toLocaleString() || 0}</div>
-                        <p className="text-xs text-muted-foreground">Últimos 30 dias</p>
+                        <div className="text-2xl font-bold text-yellow-900">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data?.summary.adCost || 0)}
+                        </div>
+                        <p className="text-xs text-yellow-700">Últimos 7 dias</p>
+                    </CardContent>
+                </Card>
+                <Card className="bg-green-50/50 border-green-100">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-green-800">Faturamento via Ads</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-green-900">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(data?.summary.adSales || 0)}
+                        </div>
+                        <p className="text-xs text-green-700">Conversão direta</p>
+                    </CardContent>
+                </Card>
+                <Card className="bg-blue-50/50 border-blue-100">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-blue-800">ACOS Médio</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-blue-900">
+                            {(data?.summary.acos || 0).toFixed(2)}%
+                        </div>
+                        <p className="text-xs text-blue-700">Publicidade / Vendas</p>
                     </CardContent>
                 </Card>
             </div>

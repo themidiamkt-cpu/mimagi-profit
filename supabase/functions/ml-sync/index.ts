@@ -138,6 +138,59 @@ serve(async (req) => {
             }).filter((a: any) => a !== null)
 
             if (mappedAds.length > 0) {
+                // Now fetch Performance Metrics for these items
+                try {
+                    const today = new Date().toISOString().split('T')[0];
+                    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+                    const metricsRes = await fetch(`https://api.mercadolibre.com/advertising/product_ads/ads/metrics?date_from=${sevenDaysAgo}&date_to=${today}&ids=${itemIds.slice(0, 50).join(',')}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+
+                    if (metricsRes.ok) {
+                        const metricsData = await metricsRes.json();
+                        // API returns an array or object per ID
+                        const metricsMap: Record<string, any> = {};
+                        if (Array.isArray(metricsData)) {
+                            metricsData.forEach((m: any) => {
+                                metricsMap[m.ad_id || m.id] = m;
+                            });
+                        }
+
+                        // Update mappedAds with metrics
+                        mappedAds.forEach((ad: any) => {
+                            const m = metricsMap[ad.ml_item_id];
+                            if (m) {
+                                ad.impressions = m.impressions || 0;
+                                ad.clicks = m.clicks || 0;
+                                ad.cost = m.cost || 0;
+                                ad.ad_sales = m.sales_amount || m.revenue || 0;
+                                ad.acos = m.acos || 0;
+                                ad.ctr = m.ctr || 0;
+                            }
+                        });
+                    }
+                } catch (metricsErr) {
+                    console.error('Error fetching Ads metrics:', metricsErr);
+                }
+
+                // Fetch Real Visits for these items
+                try {
+                    const visitsRes = await fetch(`https://api.mercadolibre.com/visits/items?ids=${itemIds.slice(0, 50).join(',')}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    if (visitsRes.ok) {
+                        const visitsData = await visitsRes.json();
+                        mappedAds.forEach((ad: any) => {
+                            if (visitsData[ad.ml_item_id]) {
+                                ad.visits = visitsData[ad.ml_item_id] || 0;
+                            }
+                        });
+                    }
+                } catch (vErr) {
+                    console.error('Error fetching visits:', vErr);
+                }
+
                 const { error: adErr } = await supabase.from('ml_ads').upsert(mappedAds, { onConflict: 'user_id,ml_item_id' })
                 if (adErr) console.error('Error upserting ads:', adErr)
             }

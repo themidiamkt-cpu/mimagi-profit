@@ -36,11 +36,21 @@ serve(async (req) => {
             .eq('user_id', user.id)
             .order('stock_quantity', { ascending: true })
 
-        const totalOrders = orders?.length || 0
-        const revenue = orders?.reduce((acc, order) => acc + Number(order.total_amount), 0) || 0
+        const now = new Date()
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+        const currentMonthOrders = orders?.filter(order => order.order_date >= startOfMonth) || []
+
+        const totalOrders = currentMonthOrders.length
+        const revenue = currentMonthOrders.reduce((acc, order) => acc + Number(order.total_amount), 0)
         const pendingOrders = orders?.filter(order => order.status === 'paid' || order.status === 'payment_required').length || 0
         const activeAds = ads?.length || 0
         const totalVisits = ads?.reduce((acc, ad) => acc + (ad.visits || 0), 0) || 0
+
+        // Product Ads Metrics
+        const totalAdCost = ads?.reduce((acc, ad) => acc + Number(ad.cost || 0), 0) || 0
+        const totalAdSales = ads?.reduce((acc, ad) => acc + Number(ad.ad_sales || 0), 0) || 0
+        const averageAcos = totalAdSales > 0 ? (totalAdCost / totalAdSales) * 100 : 0
 
         const dashboardData = {
             summary: {
@@ -49,6 +59,9 @@ serve(async (req) => {
                 pendingOrders,
                 activeAds,
                 visits: totalVisits,
+                adCost: totalAdCost,
+                adSales: totalAdSales,
+                acos: averageAcos,
                 revenueGrowth: 0,
                 ordersGrowth: 0
             },
