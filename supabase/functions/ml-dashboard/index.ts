@@ -37,13 +37,17 @@ serve(async (req) => {
             .order('stock_quantity', { ascending: true })
 
         const now = new Date()
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+        // Últimos 30 dias (não início do mês — evita zerar ao virar o mês)
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-        const currentMonthOrders = orders?.filter(order => order.order_date >= startOfMonth) || []
+        const last30Orders = orders?.filter(order => order.order_date >= thirtyDaysAgo) || []
 
-        const totalOrders = currentMonthOrders.length
-        const revenue = currentMonthOrders.reduce((acc, order) => acc + Number(order.total_amount), 0)
-        const pendingOrders = orders?.filter(order => order.status === 'paid' || order.status === 'payment_required').length || 0
+        const totalOrders = last30Orders.length
+        const revenue = last30Orders.reduce((acc, order) => acc + Number(order.total_amount), 0)
+        // Pedidos pendentes = aguardando envio (confirmed) ou pagamento pendente
+        const pendingOrders = orders?.filter(order =>
+            order.status === 'confirmed' || order.status === 'payment_required'
+        ).length || 0
         const activeAds = ads?.length || 0
         const totalVisits = ads?.reduce((acc, ad) => acc + (ad.visits || 0), 0) || 0
 

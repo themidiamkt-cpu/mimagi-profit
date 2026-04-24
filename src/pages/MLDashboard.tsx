@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ShoppingCart, TrendingUp, Clock, Package, Eye, MessageSquare, Loader2, Settings } from "lucide-react";
+import { AlertCircle, ShoppingCart, TrendingUp, Clock, Package, Eye, MessageSquare, Loader2, Settings, Bug } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -47,6 +47,8 @@ const MLDashboard = () => {
     const [isConfigured, setIsConfigured] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const [data, setData] = useState<DashboardData | null>(null);
+    const [isDebugging, setIsDebugging] = useState(false);
+    const [debugResult, setDebugResult] = useState<any>(null);
 
     const fetchData = async () => {
         try {
@@ -124,6 +126,20 @@ const MLDashboard = () => {
         }
     };
 
+    const handleDebug = async () => {
+        try {
+            setIsDebugging(true);
+            setDebugResult(null);
+            const { data: result, error } = await supabase.functions.invoke('ml-debug');
+            if (error) throw error;
+            setDebugResult(result);
+        } catch (error: any) {
+            setDebugResult({ erro: error.message });
+        } finally {
+            setIsDebugging(false);
+        }
+    };
+
     if (isLoading && !data) {
         return (
             <div className="flex h-[400px] items-center justify-center">
@@ -149,6 +165,16 @@ const MLDashboard = () => {
                             Sincronizar
                         </Button>
                     )}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDebug}
+                        disabled={isDebugging}
+                        className="border-gray-400 text-gray-600 hover:bg-gray-50"
+                    >
+                        {isDebugging ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bug className="w-4 h-4 mr-2" />}
+                        Diagnóstico API
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => navigate("/mercadolivre/configuracoes")}>
                         <Settings className="w-4 h-4 mr-2" />
                         Configurações
@@ -326,6 +352,24 @@ const MLDashboard = () => {
                     </div>
                 </CardContent>
             </Card>
+
+            {debugResult && (
+                <Card className="border-gray-300 bg-gray-50">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-sm font-mono text-gray-700 flex items-center gap-2">
+                            <Bug className="w-4 h-4" /> Resultado do Diagnóstico da API
+                        </CardTitle>
+                        <Button variant="ghost" size="sm" onClick={() => setDebugResult(null)} className="text-xs text-gray-500">
+                            Fechar
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        <pre className="text-xs font-mono bg-gray-900 text-green-400 p-4 rounded-lg overflow-auto max-h-[500px] whitespace-pre-wrap">
+                            {JSON.stringify(debugResult, null, 2)}
+                        </pre>
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 };

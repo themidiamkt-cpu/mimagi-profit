@@ -60,7 +60,7 @@ const MLSettings = () => {
             }
         };
 
-        fetchData();
+        fetchConfig();
     }, []);
 
     const handleSave = async () => {
@@ -72,7 +72,7 @@ const MLSettings = () => {
                 body: {
                     app_id: parseInt(formData.appId),
                     secret_key: formData.secretKey,
-                    redirect_uri: formData.redirect_uri,
+                    redirect_uri: formData.redirectUri,
                 },
                 headers: {
                     'x-path': 'config'
