@@ -126,15 +126,29 @@ serve(async (req) => {
       const { account_id, account_name } = await req.json();
       if (!account_id) throw new Error("account_id é obrigatório");
 
+      // Fetch existing row to get the access_token (needed for upsert)
+      const { data: existing } = await supabaseClient
+        .from("ad_integrations")
+        .select("access_token")
+        .eq("user_id", user.id)
+        .eq("platform", "meta")
+        .maybeSingle();
+
+      if (!existing?.access_token) throw new Error("Token não encontrado. Salve o Access Token primeiro.");
+
       const { error } = await supabaseClient
         .from("ad_integrations")
-        .update({
-          account_id,
-          account_name: account_name ?? null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", user.id)
-        .eq("platform", "meta");
+        .upsert(
+          {
+            user_id: user.id,
+            platform: "meta",
+            access_token: existing.access_token,
+            account_id,
+            account_name: account_name ?? null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,platform" },
+        );
 
       if (error) throw error;
       return json({ message: "Conta selecionada", account_id });

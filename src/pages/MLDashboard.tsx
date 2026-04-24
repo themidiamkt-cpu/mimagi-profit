@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ShoppingCart, TrendingUp, Clock, Package, Eye, MessageSquare, Loader2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { AlertCircle, ShoppingCart, TrendingUp, Clock, Package, Eye, MessageSquare, Loader2, Settings } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -39,6 +39,7 @@ interface DashboardData {
 
 const MLDashboard = () => {
     const { toast } = useToast();
+    const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
     const [isConfigured, setIsConfigured] = useState(false);
     const [data, setData] = useState<DashboardData | null>(null);
@@ -109,6 +110,10 @@ const MLDashboard = () => {
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold tracking-tight">Mercado Livre Dashboard</h1>
+                <Button variant="outline" size="sm" onClick={() => navigate("/mercadolivre/configuracoes")}>
+                    <Settings className="w-4 h-4 mr-2" />
+                    Configurações
+                </Button>
             </div>
 
             {!isConfigured && (
