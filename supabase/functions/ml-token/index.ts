@@ -43,6 +43,11 @@ serve(async (req) => {
             payload.grant_type = 'authorization_code'
             payload.code = code
             payload.redirect_uri = config.redirect_uri
+
+            // PKCE Implementation
+            if (config.code_verifier) {
+                payload.code_verifier = config.code_verifier
+            }
         } else if (refresh_token) {
             payload.grant_type = 'refresh_token'
             payload.refresh_token = refresh_token
@@ -57,12 +62,13 @@ serve(async (req) => {
         const data = await response.json()
 
         if (!response.ok) {
-            throw new Error(data.message || 'Failed to fetch token')
+            throw new Error(data.message || data.error_description || data.error || 'Failed to fetch token')
         }
 
         const expiresAt = new Date()
         expiresAt.setSeconds(expiresAt.getSeconds() + data.expires_in)
 
+        // Save tokens
         const { error: dbError } = await supabaseClient
             .from('ml_tokens')
             .upsert({
@@ -74,6 +80,14 @@ serve(async (req) => {
             }, { onConflict: 'user_id' })
 
         if (dbError) throw dbError
+
+        // Clear code_verifier after successful use
+        if (code) {
+            await supabaseClient
+                .from('ml_config')
+                .update({ code_verifier: null })
+                .eq('user_id', user.id)
+        }
 
         return new Response(JSON.stringify(data), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

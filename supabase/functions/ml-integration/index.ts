@@ -1,9 +1,24 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts"
+import { encode as base64url } from "https://deno.land/std@0.168.0/encoding/base64url.ts"
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+function generateCodeVerifier() {
+    const array = new Uint8Array(32)
+    crypto.getRandomValues(array)
+    return base64url(array)
+}
+
+async function generateCodeChallenge(verifier: string) {
+    const encoder = new TextEncoder()
+    const data = encoder.encode(verifier)
+    const hash = await crypto.subtle.digest("SHA-256", data)
+    return base64url(new Uint8Array(hash))
 }
 
 serve(async (req) => {
@@ -71,8 +86,20 @@ serve(async (req) => {
 
             if (!config) throw new Error('Configuração não encontrada')
 
+            // PKCE Implementation
+            const codeVerifier = generateCodeVerifier()
+            const codeChallenge = await generateCodeChallenge(codeVerifier)
+
+            // Save code_verifier to database
+            const { error: updateError } = await supabaseClient
+                .from('ml_config')
+                .update({ code_verifier: codeVerifier })
+                .eq('user_id', user.id)
+
+            if (updateError) throw updateError
+
             const state = Math.random().toString(36).substring(7)
-            const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${config.app_id}&redirect_uri=${encodeURIComponent(config.redirect_uri)}&state=${state}`
+            const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${config.app_id}&redirect_uri=${encodeURIComponent(config.redirect_uri)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`
 
             return new Response(JSON.stringify({ url: authUrl }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
