@@ -60,7 +60,6 @@ const MetaAdsSettings = () => {
       setIsLoading(true);
       const { data, error } = await supabase.functions.invoke("meta-ads", {
         method: "GET",
-        body: {},
         headers: { "x-path": "status" },
       });
       if (error) throw error;
@@ -118,7 +117,6 @@ const MetaAdsSettings = () => {
       setIsLoading(true);
       const { data, error } = await supabase.functions.invoke("meta-ads", {
         method: "GET",
-        body: {},
         headers: { "x-path": "accounts" },
       });
       if (error) throw error;
