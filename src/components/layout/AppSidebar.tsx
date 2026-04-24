@@ -11,7 +11,9 @@ import {
   RefreshCw,
   Shield,
   Box,
-  Settings2
+  Settings2,
+  ShoppingCart,
+  Tag
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -53,6 +55,27 @@ const intelligenceItems = [
   { title: 'Clientes', path: '/growth', icon: BarChart3 },
   { title: 'Vendas', path: '/bling-sales', icon: ShoppingBag },
   { title: 'Produtos', path: '/produtos', icon: Package },
+];
+
+const integrationItems = [
+  {
+    title: 'Shopee',
+    path: '/shopee',
+    icon: ShoppingCart,
+    subItems: [
+      { title: 'Dashboard', path: '/shopee' },
+      { title: 'Configurações', path: '/shopee/configuracoes' },
+    ]
+  },
+  {
+    title: 'Mercado Livre',
+    path: '/mercadolivre',
+    icon: Tag,
+    subItems: [
+      { title: 'Dashboard', path: '/mercadolivre' },
+      { title: 'Configurações', path: '/mercadolivre/configuracoes' },
+    ]
+  },
 ];
 
 
@@ -138,6 +161,30 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Integrações */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/30 uppercase text-[11px] font-light tracking-[0.1em] px-3 mb-2">
+            Integrações
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {integrationItems.map((item) => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton asChild tooltip={item.title}>
+                    <NavLink
+                      to={item.path}
+                      className="flex items-center gap-3 px-3 py-2 text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                    >
+                      <item.icon className="w-5 h-5 shrink-0" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
         {/* Admin Section */}
         {isAdmin && (

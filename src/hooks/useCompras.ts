@@ -76,9 +76,18 @@ export function useCompras(
 
   // Adicionar compra
   const addCompra = useCallback(async (compra: Omit<Compra, 'id'>) => {
-    if (!planejamentoId || !userId) {
-      console.warn('PlanejamentoId ou UserId ausente para adicionar compra');
+    if (!userId) {
+      console.error('UserId ausente para adicionar compra. Operação cancelada.');
+      toast({
+        title: 'Erro de Autenticação',
+        description: 'Não foi possível identificar seu usuário. Faça login novamente.',
+        variant: 'destructive',
+      });
       return;
+    }
+
+    if (!planejamentoId) {
+      console.warn('Adicionando compra sem planejamento_id associado.');
     }
 
     try {

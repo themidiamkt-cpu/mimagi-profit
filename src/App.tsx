@@ -33,6 +33,10 @@ import CustomerRegistration from "./pages/CustomerRegistration";
 import TabDetail from "./pages/TabDetail";
 import BlingSales from "./pages/BlingSales";
 import Produtos from "./pages/Produtos";
+import ShopeeDashboard from "./pages/ShopeeDashboard";
+import ShopeeSettings from "./pages/ShopeeSettings";
+import MLDashboard from "./pages/MLDashboard";
+import MLSettings from "./pages/MLSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -63,6 +67,12 @@ const DashboardRoutes = () => (
         <Route path="/fichinhas/tab/:id" element={<TabDetail />} />
         <Route path="/bling-sales" element={<BlingSales />} />
         <Route path="/growth" element={<GrowthOS />} />
+        {/* Shopee */}
+        <Route path="/shopee" element={<ShopeeDashboard />} />
+        <Route path="/shopee/configuracoes" element={<ShopeeSettings />} />
+        {/* Mercado Livre */}
+        <Route path="/mercadolivre" element={<MLDashboard />} />
+        <Route path="/mercadolivre/configuracoes" element={<MLSettings />} />
         {/* Default */}
         <Route path="/" element={<Navigate to="/visao" replace />} />
         <Route path="*" element={<NotFound />} />
