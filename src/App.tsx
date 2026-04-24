@@ -28,6 +28,8 @@ import Financeiro from "./pages/Financeiro";
 import Fichinhas from "./pages/Fichinhas";
 import GrowthOS from "./pages/GrowthOS";
 import BlingCallback from "./pages/BlingCallback";
+import MLCallback from "./pages/MLCallback";
+import ShopeeCallback from "./pages/ShopeeCallback";
 import CustomerDetail from "./pages/CustomerDetail";
 import CustomerRegistration from "./pages/CustomerRegistration";
 import TabDetail from "./pages/TabDetail";
@@ -37,6 +39,10 @@ import ShopeeDashboard from "./pages/ShopeeDashboard";
 import ShopeeSettings from "./pages/ShopeeSettings";
 import MLDashboard from "./pages/MLDashboard";
 import MLSettings from "./pages/MLSettings";
+import MetaAds from "./pages/MetaAds";
+import MetaAdsSettings from "./pages/MetaAdsSettings";
+import TikTokAds from "./pages/TikTokAds";
+import TikTokAdsSettings from "./pages/TikTokAdsSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -73,6 +79,12 @@ const DashboardRoutes = () => (
         {/* Mercado Livre */}
         <Route path="/mercadolivre" element={<MLDashboard />} />
         <Route path="/mercadolivre/configuracoes" element={<MLSettings />} />
+        {/* Meta Ads */}
+        <Route path="/meta-ads" element={<MetaAds />} />
+        <Route path="/meta-ads/configuracoes" element={<MetaAdsSettings />} />
+        {/* TikTok Ads */}
+        <Route path="/tiktok-ads" element={<TikTokAds />} />
+        <Route path="/tiktok-ads/configuracoes" element={<TikTokAdsSettings />} />
         {/* Default */}
         <Route path="/" element={<Navigate to="/visao" replace />} />
         <Route path="*" element={<NotFound />} />
@@ -93,6 +105,8 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
             <Route path="/callback" element={<BlingCallback />} />
+            <Route path="/mercadolivre/callback" element={<MLCallback />} />
+            <Route path="/shopee/callback" element={<ShopeeCallback />} />
 
             {/* Pending approval route */}
             <Route path="/aguardando-aprovacao" element={<AguardandoAprovacao />} />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Eye, EyeOff, ExternalLink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const ShopeeSettings = () => {
     const { toast } = useToast();
@@ -18,37 +19,165 @@ const ShopeeSettings = () => {
         partnerId: "",
         partnerKey: "",
         shopId: "",
-        redirectUri: "https://seusite.com/shopee/callback",
+        redirectUri: `${window.location.origin}/shopee/callback`,
         environment: "sandbox",
     });
 
+    // Load existing config and connection status on mount
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                setIsLoading(true);
+
+                const { data: config, error: configError } = await supabase.functions.invoke('shopee-integration', {
+                    method: 'GET',
+                    body: {},
+                    headers: { 'x-path': 'config' },
+                });
+
+                if (configError) throw configError;
+
+                if (config && config.partner_id) {
+                    setFormData(prev => ({
+                        ...prev,
+                        partnerId: config.partner_id?.toString() || "",
+                        shopId: config.shop_id?.toString() || "",
+                        redirectUri: config.redirect_uri || prev.redirectUri,
+                        environment: config.environment || "sandbox",
+                    }));
+                    setStatus("saved");
+                }
+
+                // Check if token exists
+                const { data: tokenStatus } = await supabase.functions.invoke('shopee-integration', {
+                    method: 'GET',
+                    body: {},
+                    headers: { 'x-path': 'status' },
+                });
+
+                if (tokenStatus?.status === 'connected') {
+                    setStatus("connected");
+                }
+            } catch (error: any) {
+                console.error('Error fetching Shopee config:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchConfig();
+    }, []);
+
     const handleSave = async () => {
-        setIsLoading(true);
-        // Mock save logic
-        setTimeout(() => {
-            setIsLoading(false);
+        if (!formData.partnerId || !formData.partnerKey || !formData.shopId) {
+            toast({
+                title: "Campos obrigatórios",
+                description: "Preencha Partner ID, Partner Key e Shop ID.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+
+            const { data, error } = await supabase.functions.invoke('shopee-integration', {
+                method: 'POST',
+                body: {
+                    partner_id: parseInt(formData.partnerId),
+                    partner_key: formData.partnerKey,
+                    shop_id: parseInt(formData.shopId),
+                    redirect_uri: formData.redirectUri,
+                    environment: formData.environment,
+                },
+                headers: { 'x-path': 'config' },
+            });
+
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+
             setStatus("saved");
             toast({
                 title: "Configurações salvas",
                 description: "Suas credenciais foram armazenadas com sucesso.",
             });
-        }, 1000);
-    };
-
-    const handleAuthorize = () => {
-        const authUrl = `https://partner.shopeemobile.com/api/v2/shop/auth_partner?partner_id=${formData.partnerId}&redirect=${formData.redirectUri}`;
-        window.open(authUrl, "_blank");
-    };
-
-    const handleTestConnection = () => {
-        setIsLoading(true);
-        setTimeout(() => {
-            setIsLoading(false);
+        } catch (error: any) {
             toast({
-                title: "Conexão testada",
-                description: "A conexão com a API da Shopee foi estabelecida com sucesso.",
+                title: "Erro ao salvar",
+                description: error.message,
+                variant: "destructive",
             });
-        }, 1000);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleAuthorize = async () => {
+        try {
+            setIsLoading(true);
+
+            const { data, error } = await supabase.functions.invoke('shopee-integration', {
+                method: 'GET',
+                body: {},
+                headers: { 'x-path': 'auth-url' },
+            });
+
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+
+            if (data?.url) {
+                window.location.href = data.url;
+            }
+        } catch (error: any) {
+            toast({
+                title: "Erro ao gerar URL de autorização",
+                description: error.message,
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleTestConnection = async () => {
+        try {
+            setIsLoading(true);
+
+            const { data, error } = await supabase.functions.invoke('shopee-integration', {
+                method: 'GET',
+                body: {},
+                headers: { 'x-path': 'status' },
+            });
+
+            if (error) throw error;
+
+            if (data?.status === 'connected') {
+                toast({
+                    title: "Conexão ativa",
+                    description: "Sua loja Shopee está conectada e funcionando.",
+                });
+            } else if (data?.status === 'expired') {
+                toast({
+                    title: "Token expirado",
+                    description: "Sua autorização expirou. Por favor, autorize novamente.",
+                    variant: "destructive",
+                });
+            } else {
+                toast({
+                    title: "Não conectado",
+                    description: "Salve as credenciais e autorize com a Shopee.",
+                    variant: "destructive",
+                });
+            }
+        } catch (error: any) {
+            toast({
+                title: "Erro ao testar conexão",
+                description: error.message,
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -94,19 +223,20 @@ const ShopeeSettings = () => {
                                     <AccordionTrigger>Passo 2 — Criar um aplicativo</AccordionTrigger>
                                     <AccordionContent className="space-y-2">
                                         <p>No painel do Open Platform, vá em <strong>"My Apps"</strong> → <strong>"Create App"</strong>.</p>
-                                        <p>Preencha nome, descrição e selecione <strong>"Open API"</strong>. Em "Redirect URL" coloque a URL do seu sistema.</p>
+                                        <p>Preencha nome, descrição e selecione <strong>"Open API"</strong>. Em "Redirect URL" cole a URL exibida no formulário ao lado.</p>
                                     </AccordionContent>
                                 </AccordionItem>
                                 <AccordionItem value="step-3">
                                     <AccordionTrigger>Passo 3 — Obter as credenciais</AccordionTrigger>
                                     <AccordionContent className="space-y-2">
                                         <p>Após criar o app, copie o <strong>Partner ID</strong> e o <strong>Partner Key</strong> que aparecerão na tela do app.</p>
+                                        <p>O <strong>Shop ID</strong> está disponível no painel do vendedor em Configurações da Loja.</p>
                                     </AccordionContent>
                                 </AccordionItem>
                                 <AccordionItem value="step-4">
                                     <AccordionTrigger>Passo 4 — Autorizar a loja</AccordionTrigger>
                                     <AccordionContent className="space-y-2">
-                                        <p>Clique no botão <strong>"Autorizar com Shopee"</strong> ao lado. Você será redirecionado para o login da Shopee para autorizar o acesso à sua loja.</p>
+                                        <p>Salve as credenciais e clique em <strong>"Autorizar com Shopee"</strong>. Você será redirecionado para o login da Shopee.</p>
                                         <p>Ao concluir, o sistema salvará automaticamente os tokens de acesso.</p>
                                     </AccordionContent>
                                 </AccordionItem>
@@ -172,10 +302,12 @@ const ShopeeSettings = () => {
                                 <Label htmlFor="redirectUri">Redirect URI</Label>
                                 <Input
                                     id="redirectUri"
-                                    placeholder="https://seusite.com/shopee/callback"
                                     value={formData.redirectUri}
                                     onChange={(e) => setFormData({ ...formData, redirectUri: e.target.value })}
                                 />
+                                <p className="text-xs text-muted-foreground">
+                                    Copie esta URL e cole no campo "Redirect URL" do seu app na Shopee Open Platform.
+                                </p>
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="environment">Ambiente</Label>
@@ -194,15 +326,28 @@ const ShopeeSettings = () => {
                             </div>
 
                             <div className="flex flex-col gap-3 pt-4">
-                                <Button onClick={handleSave} disabled={isLoading} className="w-full">
+                                <Button
+                                    onClick={handleSave}
+                                    disabled={isLoading}
+                                    className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold"
+                                >
                                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                     Salvar credenciais
                                 </Button>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <Button variant="outline" onClick={handleAuthorize} className="border-orange-600 text-orange-600 hover:bg-orange-50">
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleAuthorize}
+                                        disabled={isLoading || status === "not_configured"}
+                                        className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                                    >
                                         Autorizar com Shopee
                                     </Button>
-                                    <Button variant="secondary" onClick={handleTestConnection} disabled={isLoading}>
+                                    <Button
+                                        variant="secondary"
+                                        onClick={handleTestConnection}
+                                        disabled={isLoading}
+                                    >
                                         Testar conexão
                                     </Button>
                                 </div>
