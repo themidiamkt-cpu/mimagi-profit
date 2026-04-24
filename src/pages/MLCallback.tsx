@@ -37,24 +37,17 @@ export default function MLCallback() {
                 });
 
                 if (fnError) throw fnError;
-                if (data?.error) throw new Error(data.error);
+
+                if (data?.success === false) {
+                    const errorMsg = `${data.message || data.error}${data.details && data.details !== 'No additional details' ? ` (${data.details})` : ''}`;
+                    throw new Error(errorMsg);
+                }
 
                 toast.success('Mercado Livre conectado com sucesso!');
                 navigate('/mercadolivre');
             } catch (err: any) {
                 console.error('ML Auth Error (Full):', err);
-
-                let errorMsg = err.message || 'Erro ao processar token';
-
-                // Try to extract JSON error from Edge Function response
-                if (err.context?.json) {
-                    const json = err.context.json;
-                    errorMsg = json.message || json.error || errorMsg;
-                    if (json.details && json.details !== 'No additional details') {
-                        errorMsg += ` (${json.details})`;
-                    }
-                }
-
+                const errorMsg = err.message || 'Erro ao processar token';
                 setError(errorMsg);
                 toast.error('Erro ao conectar: ' + errorMsg);
                 setTimeout(() => navigate('/mercadolivre/configuracoes'), 8000);
