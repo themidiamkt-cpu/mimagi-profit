@@ -26,49 +26,77 @@ serve(async (req) => {
         const body = await req.json()
         const { code, refresh_token } = body
 
-        const { data: config } = await supabaseClient
+        // 1. Get Config (explicitly naming columns to avoid failure if some are missing)
+        const { data: config, error: configError } = await supabaseClient
             .from('ml_config')
-            .select('*')
+            .select('app_id, secret_key, redirect_uri, code_verifier')
             .eq('user_id', user.id)
             .maybeSingle()
 
-        if (!config) throw new Error('ML config not found')
+        if (configError) {
+            console.error('Config fetch error:', configError);
+            throw new Error(`Database error: ${configError.message}`);
+        }
+        if (!config) throw new Error('ML config not found');
 
+        // 2. Prepare Payload
         const payload: any = {
             client_id: config.app_id,
             client_secret: config.secret_key,
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: config.redirect_uri,
         }
 
-        if (code) {
-            payload.grant_type = 'authorization_code'
-            payload.code = code
-            payload.redirect_uri = config.redirect_uri
-
-            // PKCE Implementation
-            if (config.code_verifier) {
-                payload.code_verifier = config.code_verifier
-            }
-        } else if (refresh_token) {
-            payload.grant_type = 'refresh_token'
-            payload.refresh_token = refresh_token
+        // PKCE Implementation (optional if column exists)
+        if (config.code_verifier) {
+            payload.code_verifier = config.code_verifier
         }
 
-        const response = await fetch('https://api.mercadolivre.com/oauth/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams(payload).toString(),
-        })
+        console.log('Exchanging token for user:', user.id);
+        const apiUrl = 'https://api.mercadolibre.com/oauth/token';
+
+        // 3. Exchange Token
+        let response;
+        try {
+            console.log(`Fetching from ${apiUrl}...`);
+            response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams(payload).toString(),
+            })
+        } catch (fetchErr: any) {
+            console.error('Fetch error details:', fetchErr);
+            throw new Error(`Cuidado: O servidor do Mercado Livre não pôde ser alcançado (${fetchErr.message}). Tente novamente em alguns segundos.`);
+        }
 
         const data = await response.json()
 
         if (!response.ok) {
-            throw new Error(data.message || data.error_description || data.error || 'Failed to fetch token')
+            console.error('ML API Error response:', data);
+            throw new Error(data.message || data.error_description || data.error || 'Failed to fetch token from ML API')
+        }
+
+        const sellerId = data.user_id;
+        let accountName = 'Mercado Livre Account';
+
+        // Fetch User Info to get Nickname
+        try {
+            const userRes = await fetch(`https://api.mercadolibre.com/users/${sellerId}`, {
+                headers: { 'Authorization': `Bearer ${data.access_token}` }
+            });
+            if (userRes.ok) {
+                const userData = await userRes.json();
+                accountName = userData.nickname || accountName;
+            }
+        } catch (e) {
+            console.error('Error fetching user info:', e);
         }
 
         const expiresAt = new Date()
-        expiresAt.setSeconds(expiresAt.getSeconds() + data.expires_in)
+        expiresAt.setSeconds(expiresAt.getSeconds() + (data.expires_in || 21600));
 
-        // Save tokens
+        // 4. Save tokens
         const { error: dbError } = await supabaseClient
             .from('ml_tokens')
             .upsert({
@@ -79,25 +107,37 @@ serve(async (req) => {
                 updated_at: new Date().toISOString(),
             }, { onConflict: 'user_id' })
 
-        if (dbError) throw dbError
-
-        // Clear code_verifier after successful use
-        if (code) {
-            await supabaseClient
-                .from('ml_config')
-                .update({ code_verifier: null })
-                .eq('user_id', user.id)
+        if (dbError) {
+            console.error('Token save error:', dbError);
+            throw new Error(`Database error saving tokens: ${dbError.message}`);
         }
 
-        return new Response(JSON.stringify(data), {
+        // 5. Update Config with Seller Info and clear code_verifier
+        await supabaseClient
+            .from('ml_config')
+            .update({
+                seller_id: sellerId,
+                account_name: accountName,
+                code_verifier: null
+            })
+            .eq('user_id', user.id)
+
+        return new Response(JSON.stringify({ success: true, ...data }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })
 
     } catch (error: any) {
-        return new Response(JSON.stringify({ error: error.message }), {
+        console.error('ML Token Edge Function Error:', error);
+        return new Response(JSON.stringify({
+            success: false,
+            error: error.name || 'Error',
+            message: error.message,
+            details: error.details || error.hint || 'No additional details',
+            context: 'ml-token'
+        }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 400,
+            status: 200,
         })
     }
 })

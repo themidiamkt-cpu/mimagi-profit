@@ -42,63 +42,84 @@ const MLDashboard = () => {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
     const [isConfigured, setIsConfigured] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [data, setData] = useState<DashboardData | null>(null);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const { data: config } = await supabase
-                    .from('ml_config')
-                    .select('id')
-                    .maybeSingle();
+    const fetchData = async () => {
+        try {
+            setIsLoading(true);
+            const { data: config } = await supabase
+                .from('ml_config')
+                .select('id')
+                .maybeSingle();
 
-                setIsConfigured(!!config);
+            setIsConfigured(!!config);
 
-                if (config) {
-                    const { data: dashboardData, error: dashboardError } = await supabase.functions.invoke('ml-dashboard');
-                    if (dashboardError) throw dashboardError;
-                    setData(dashboardData);
-                } else {
-                    // Mock data for demonstration if not configured
-                    setData({
-                        summary: {
-                            totalOrders: 85,
-                            revenue: 8450.00,
-                            pendingOrders: 8,
-                            activeAds: 124,
-                            visits: 12500,
-                            revenueGrowth: 15,
-                            ordersGrowth: 10
-                        },
-                        recentOrders: [
-                            { id: "200000123456", buyer: "JOAO_SILVA", status: "paid", value: "R$ 120,00", date: "24/04/2024" },
-                            { id: "200000123457", buyer: "MARIA_OLIVEIRA", status: "shipped", value: "R$ 85,50", date: "23/04/2024" },
-                        ],
-                        lowStockAds: [
-                            { title: "Kit 3 Body Infantil Algodão", sku: "KIT-BODY-01", qty: 4 },
-                        ],
-                        unansweredQuestions: [
-                            { id: "1", question: "Tem tamanho G disponível?", ad: "Kit 3 Body Infantil Algodão" },
-                        ],
-                        chartData: []
-                    });
-                }
-            } catch (error: any) {
-                console.error('Error fetching ML data:', error);
-                toast({
-                    title: "Erro ao carregar dados",
-                    description: error.message,
-                    variant: "destructive",
+            if (config) {
+                const { data: dashboardData, error: dashboardError } = await supabase.functions.invoke('ml-dashboard');
+                if (dashboardError) throw dashboardError;
+                setData(dashboardData);
+            } else {
+                // Mock data for demonstration if not configured
+                setData({
+                    summary: {
+                        totalOrders: 0,
+                        revenue: 0,
+                        pendingOrders: 0,
+                        activeAds: 0,
+                        visits: 0,
+                        revenueGrowth: 0,
+                        ordersGrowth: 0
+                    },
+                    recentOrders: [],
+                    lowStockAds: [],
+                    unansweredQuestions: [],
+                    chartData: []
                 });
-            } finally {
-                setIsLoading(false);
             }
-        };
+        } catch (error: any) {
+            console.error('Error fetching ML data:', error);
+            toast({
+                title: "Erro ao carregar dados",
+                description: error.message,
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
+    useEffect(() => {
         fetchData();
     }, [toast]);
 
-    if (isLoading) {
+    const handleSync = async () => {
+        try {
+            setIsSyncing(true);
+            const { data: syncData, error: syncError } = await supabase.functions.invoke('ml-sync');
+
+            if (syncError) throw syncError;
+            if (syncData?.success === false) throw new Error(syncData.error);
+
+            toast({
+                title: "Sincronização concluída",
+                description: `Importados ${syncData.orders} pedidos e ${syncData.ads} anúncios.`,
+            });
+
+            // Refresh data
+            fetchData();
+        } catch (error: any) {
+            toast({
+                title: "Erro na sincronização",
+                description: error.message,
+                variant: "destructive",
+            });
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    if (isLoading && !data) {
         return (
             <div className="flex h-[400px] items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-yellow-500" />
@@ -110,10 +131,24 @@ const MLDashboard = () => {
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold tracking-tight">Mercado Livre Dashboard</h1>
-                <Button variant="outline" size="sm" onClick={() => navigate("/mercadolivre/configuracoes")}>
-                    <Settings className="w-4 h-4 mr-2" />
-                    Configurações
-                </Button>
+                <div className="flex gap-2">
+                    {isConfigured && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleSync}
+                            disabled={isSyncing}
+                            className="border-yellow-600 text-yellow-700 hover:bg-yellow-50"
+                        >
+                            {isSyncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <TrendingUp className="w-4 h-4 mr-2" />}
+                            Sincronizar
+                        </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => navigate("/mercadolivre/configuracoes")}>
+                        <Settings className="w-4 h-4 mr-2" />
+                        Configurações
+                    </Button>
+                </div>
             </div>
 
             {!isConfigured && (

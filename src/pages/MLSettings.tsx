@@ -49,7 +49,9 @@ const MLSettings = () => {
 
                 if (token) {
                     setStatus("connected");
-                    setAccountName("Mimagi Kids");
+                    if (config?.account_name) {
+                        setAccountName(config.account_name);
+                    }
                 }
             } catch (error: any) {
                 console.error('Error fetching ML config:', error);
@@ -58,7 +60,7 @@ const MLSettings = () => {
             }
         };
 
-        fetchConfig();
+        fetchData();
     }, []);
 
     const handleSave = async () => {
@@ -70,7 +72,7 @@ const MLSettings = () => {
                 body: {
                     app_id: parseInt(formData.appId),
                     secret_key: formData.secretKey,
-                    redirect_uri: formData.redirectUri,
+                    redirect_uri: formData.redirect_uri,
                 },
                 headers: {
                     'x-path': 'config'
@@ -78,6 +80,7 @@ const MLSettings = () => {
             });
 
             if (error) throw error;
+            if (data?.success === false) throw new Error(data.error);
 
             setStatus("saved");
             toast({
@@ -106,17 +109,38 @@ const MLSettings = () => {
             });
 
             if (error) throw error;
+            if (data?.success === false) throw new Error(data.error);
+
             if (data?.url) {
                 window.location.href = data.url;
             }
         } catch (error: any) {
-            let errorMsg = error.message;
-            if (error.context?.json?.error) {
-                errorMsg = `${error.context.json.error}: ${error.context.json.details || ''}`;
-            }
             toast({
                 title: "Erro ao gerar URL",
-                description: errorMsg,
+                description: error.message,
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSync = async () => {
+        try {
+            setIsLoading(true);
+            const { data, error } = await supabase.functions.invoke('ml-sync');
+
+            if (error) throw error;
+            if (data?.success === false) throw new Error(data.error);
+
+            toast({
+                title: "Sincronização concluída",
+                description: `Importados ${data.orders} pedidos e ${data.ads} anúncios.`,
+            });
+        } catch (error: any) {
+            toast({
+                title: "Erro na sincronização",
+                description: error.message,
                 variant: "destructive",
             });
         } finally {
@@ -130,7 +154,7 @@ const MLSettings = () => {
             setIsLoading(false);
             toast({
                 title: "Conexão testada",
-                description: "Conectado com sucesso à conta: MIMAGI_KIDS_OFFICIAL",
+                description: `Conectado com sucesso à conta: ${accountName || 'Mimagi Kids'}`,
             });
         }, 1000);
     };
@@ -151,12 +175,34 @@ const MLSettings = () => {
                         </span>
                     )}
                     {status === "connected" && (
-                        <span className="flex items-center gap-1 text-sm font-medium text-green-500">
-                            <CheckCircle2 className="h-4 w-4" /> Conectado — Conta: Mimagi Kids
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                            <span className="flex items-center gap-1 text-sm font-medium text-green-500">
+                                <CheckCircle2 className="h-4 w-4" /> Conectado — Conta: {accountName || 'Carregando...'}
+                            </span>
+                        </div>
                     )}
                 </div>
             </div>
+
+            {status === "connected" && (
+                <Alert className="bg-green-50 border-green-200">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <AlertTitle className="text-green-900">Integração Ativa</AlertTitle>
+                    <AlertDescription className="text-green-800 flex justify-between items-center">
+                        <span>Seus dados do Mercado Livre estão prontos para sincronização.</span>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-white border-green-600 text-green-700 hover:bg-green-100"
+                            onClick={handleSync}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Sincronizar Agora
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-2">
                 <div className="space-y-6">
