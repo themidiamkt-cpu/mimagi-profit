@@ -39,7 +39,7 @@ serve(async (req) => {
         if (userError || !user) throw new Error('Invalid user token')
 
         const url = new URL(req.url)
-        const path = url.pathname.split('/').pop()
+        const path = req.headers.get('x-path') || url.pathname.split('/').pop()
 
         if (req.method === 'POST' && path === 'config') {
             const body = await req.json()
