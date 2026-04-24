@@ -99,7 +99,7 @@ serve(async (req) => {
             if (updateError) throw updateError
 
             const state = Math.random().toString(36).substring(7)
-            const authUrl = `https://auth.mercadolibre.com.br/authorization?response_type=code&client_id=${config.app_id}&redirect_uri=${encodeURIComponent(config.redirect_uri)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`
+            const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${config.app_id}&redirect_uri=${encodeURIComponent(config.redirect_uri)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`
 
             return new Response(JSON.stringify({ url: authUrl }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
