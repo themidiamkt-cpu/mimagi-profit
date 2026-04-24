@@ -42,9 +42,13 @@ export default function MLCallback() {
                 toast.success('Mercado Livre conectado com sucesso!');
                 navigate('/mercadolivre');
             } catch (err: any) {
-                const msg = err.message || 'Erro ao processar token';
-                setError(msg);
-                toast.error('Erro ao conectar: ' + msg);
+                console.error('Auth Error:', err);
+                let errorMsg = err.message || 'Erro ao processar token';
+                if (err.context?.json?.error) {
+                    errorMsg = `${err.context.json.error}: ${err.context.json.details || ''}`;
+                }
+                setError(errorMsg);
+                toast.error('Erro ao conectar: ' + errorMsg);
                 setTimeout(() => navigate('/mercadolivre/configuracoes'), 5000);
             }
         };
