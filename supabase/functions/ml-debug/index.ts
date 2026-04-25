@@ -70,7 +70,7 @@ serve(async (req) => {
             )
             results.visitas = {
                 status: visitsRes.status,
-                url: `https://api.mercadolibre.com/items/visits?ids=${itemIds.slice(0,3).join(',')}...&date_from=${thirtyDaysAgo}&date_to=${today}`,
+                url: `https://api.mercadolibre.com/items/visits?ids=${itemIds.slice(0, 3).join(',')}...&date_from=${thirtyDaysAgo}&date_to=${today}`,
                 data: visitsRes.ok ? await visitsRes.json() : await visitsRes.text(),
             }
 
@@ -106,24 +106,46 @@ serve(async (req) => {
                 }
             }
 
-            // 5. Pedidos (amostra)
+            // 5. Pedidos (30 dias - Padrão)
             const ordersRes = await fetch(
                 `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.status=paid&order.date_created.from=${thirtyDaysAgo}T00:00:00.000-00:00&sort=date_desc`,
                 { headers: { 'Authorization': `Bearer ${accessToken}` } }
             )
             const ordersJson = await ordersRes.json()
-            results.pedidos = {
-                status: ordersRes.status,
+            results.pedidos_30d_pagos = {
                 total_na_api: ordersJson.paging?.total ?? 0,
                 retornados: (ordersJson.results || []).length,
                 primeiros_3: (ordersJson.results || []).slice(0, 3).map((o: any) => ({
                     id: o.id,
                     status: o.status,
                     total_amount: o.total_amount,
-                    date_created: o.date_created,
-                    buyer: o.buyer?.nickname
+                    date_created: o.date_created
                 })),
-                erro: ordersJson.error || null,
+            }
+
+            // 6. Teste Histórico (180 dias)
+            const historyDaysAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            const historyRes = await fetch(
+                `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.status=paid&order.date_created.from=${historyDaysAgo}T00:00:00.000-00:00`,
+                { headers: { 'Authorization': `Bearer ${accessToken}` } }
+            )
+            const historyJson = await historyRes.json()
+            results.pedidos_180d_pagos = {
+                total_na_api: historyJson.paging?.total ?? 0,
+            }
+
+            // 7. Teste Sem Filtro de Status (30 dias)
+            const allStatusRes = await fetch(
+                `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.date_created.from=${thirtyDaysAgo}T00:00:00.000-00:00`,
+                { headers: { 'Authorization': `Bearer ${accessToken}` } }
+            )
+            const allStatusJson = await allStatusRes.json()
+            results.pedidos_30d_todos_status = {
+                total_na_api: allStatusJson.paging?.total ?? 0,
+                status_frequentes: (allStatusJson.results || []).reduce((acc: any, o: any) => {
+                    acc[o.status] = (acc[o.status] || 0) + 1
+                    return acc
+                }, {})
             }
         }
 
