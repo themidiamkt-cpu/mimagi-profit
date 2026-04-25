@@ -32,14 +32,19 @@ serve(async (req) => {
 
         if (tokenError || !tokenData) throw new Error('Conta do Mercado Livre não conectada')
 
-        // Parse request body for optional 'days' parameter
+        // Parse request body for optional 'days' or date range parameters
         let syncDays = 30
+        let dateFromOverride: string | null = null
+        let dateToOverride: string | null = null
+
         try {
             const body = await req.json()
             if (body?.days) syncDays = Number(body.days)
-            console.log(`[ml-sync] Iniciando sync para os últimos ${syncDays} dias`)
+            if (body?.date_from) dateFromOverride = body.date_from
+            if (body?.date_to) dateToOverride = body.date_to
+            console.log(`[ml-sync] Iniciando sync. Período: ${dateFromOverride || (syncDays + ' dias')} até ${dateToOverride || 'hoje'}`)
         } catch (_) {
-            // Se não houver body ou não for JSON, usa o padrão de 30 dias
+            // Se não houver body ou não for JSON, usa o padrão
         }
 
         let accessToken = tokenData.access_token
@@ -91,12 +96,12 @@ serve(async (req) => {
         if (!config?.seller_id) throw new Error('seller_id não encontrado — reconecte a conta do ML')
 
         const sellerId = config.seller_id
-        const today = new Date().toISOString().split('T')[0]
-        const fromDate = new Date(Date.now() - syncDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        const today = dateToOverride || new Date().toISOString().split('T')[0]
+        const fromDate = dateFromOverride || new Date(Date.now() - syncDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-        // ── 2. Pedidos (últimos syncDays dias, pagos) — com PAGINAÇÃO ───────
-        console.log(`[ml-sync] Buscando pedidos (${syncDays} dias)...`)
+        // ── 2. Pedidos — com PAGINAÇÃO ───────
+        console.log(`[ml-sync] Buscando pedidos (De ${fromDate} até ${today})...`)
         const rawOrders: any[] = []
         const ORDER_PAGE_SIZE = 50
         let ordersOffset = 0

@@ -6,6 +6,8 @@ import { AlertCircle, ShoppingCart, TrendingUp, Clock, Package, Eye, MessageSqua
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { AdvancedDatePicker } from "@/components/bling/AdvancedDatePicker";
+import { subDays } from "date-fns";
 
 interface DashboardData {
     summary: {
@@ -56,6 +58,10 @@ const MLDashboard = () => {
     const [data, setData] = useState<DashboardData | null>(null);
     const [isDebugging, setIsDebugging] = useState(false);
     const [debugResult, setDebugResult] = useState<any>(null);
+    const [syncRange, setSyncRange] = useState({
+        start: subDays(new Date(), 30).toISOString().split('T')[0],
+        end: new Date().toISOString().split('T')[0]
+    });
 
     const fetchData = async () => {
         try {
@@ -107,18 +113,18 @@ const MLDashboard = () => {
         fetchData();
     }, [toast]);
 
-    const handleSync = async (days = 30) => {
+    const handleSync = async (options: { days?: number, date_from?: string, date_to?: string } = { days: 30 }) => {
         try {
             setIsSyncing(true);
             const { data: syncData, error: syncError } = await supabase.functions.invoke('ml-sync', {
-                body: { days }
+                body: options
             });
 
             if (syncError) throw syncError;
             if (syncData?.success === false) throw new Error(syncData.error);
 
             toast({
-                title: days > 30 ? "Sincronização histórica concluída" : "Sincronização concluída",
+                title: options.date_from ? "Sincronização por período concluída" : (options.days && options.days > 30 ? "Sincronização histórica concluída" : "Sincronização concluída"),
                 description: `Importados ${syncData.orders} pedidos e ${syncData.ads} anúncios.`,
             });
 
@@ -163,26 +169,31 @@ const MLDashboard = () => {
                 <h1 className="text-3xl font-bold tracking-tight">Mercado Livre Dashboard</h1>
                 <div className="flex gap-2">
                     {isConfigured && (
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <AdvancedDatePicker
+                                dateStart={syncRange.start}
+                                dateEnd={syncRange.end}
+                                onRangeSelect={(start, end) => setSyncRange({ start, end })}
+                            />
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleSync(30)}
+                                onClick={() => handleSync({ date_from: syncRange.start, date_to: syncRange.end })}
+                                disabled={isSyncing}
+                                className="border-blue-600 text-blue-700 hover:bg-blue-50"
+                            >
+                                {isSyncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Clock className="w-4 h-4 mr-2" />}
+                                Sincronizar Período
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleSync({ days: 30 })}
                                 disabled={isSyncing}
                                 className="border-yellow-600 text-yellow-700 hover:bg-yellow-50"
                             >
                                 {isSyncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <TrendingUp className="w-4 h-4 mr-2" />}
                                 Sincronizar (30 dias)
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleSync(180)}
-                                disabled={isSyncing}
-                                className="border-blue-600 text-blue-700 hover:bg-blue-50"
-                            >
-                                {isSyncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Clock className="w-4 h-4 mr-2" />}
-                                Sincronizar Histórico (6 meses)
                             </Button>
                         </div>
                     )}
