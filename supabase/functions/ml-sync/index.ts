@@ -85,15 +85,41 @@ serve(async (req) => {
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-        // ── 2. Pedidos (últimos 30 dias, pagos) ───────────────────────
-        console.log('[ml-sync] Buscando pedidos...')
-        const ordersRes = await fetch(
-            `https://api.mercadolibre.com/orders/search?seller=${sellerId}&order.status=paid&order.date_created.from=${thirtyDaysAgo}T00:00:00.000-00:00&sort=date_desc`,
-            { headers: { 'Authorization': `Bearer ${accessToken}` } }
-        )
-        const ordersJson = await ordersRes.json()
-        const rawOrders = ordersJson.results || []
-        console.log(`[ml-sync] ${rawOrders.length} pedidos encontrados (total: ${ordersJson.paging?.total ?? '?'})`)
+        // ── 2. Pedidos (últimos 30 dias, pagos) — com PAGINAÇÃO ───────
+        console.log('[ml-sync] Buscando pedidos (paginado)...')
+        const rawOrders: any[] = []
+        const ORDER_PAGE_SIZE = 50
+        let ordersOffset = 0
+        let ordersTotal = 0
+        // ML retorna até 50 por página; iteramos até consumir paging.total
+        while (true) {
+            const ordersUrl =
+                `https://api.mercadolibre.com/orders/search?seller=${sellerId}` +
+                `&order.status=paid` +
+                `&order.date_created.from=${thirtyDaysAgo}T00:00:00.000-00:00` +
+                `&sort=date_desc&offset=${ordersOffset}&limit=${ORDER_PAGE_SIZE}`
+            const ordersRes = await fetch(ordersUrl, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            })
+            if (!ordersRes.ok) {
+                const errText = await ordersRes.text()
+                console.warn('[ml-sync] orders/search erro:', ordersRes.status, errText.slice(0, 300))
+                break
+            }
+            const ordersJson = await ordersRes.json()
+            const pageResults = ordersJson.results || []
+            ordersTotal = ordersJson.paging?.total ?? ordersTotal
+            rawOrders.push(...pageResults)
+            console.log(`[ml-sync] pedidos: offset=${ordersOffset}, página=${pageResults.length}, acumulado=${rawOrders.length}/${ordersTotal}`)
+            if (pageResults.length < ORDER_PAGE_SIZE) break
+            ordersOffset += ORDER_PAGE_SIZE
+            // ML tem teto de offset ~10k — paramos antes para não tomar 4xx
+            if (ordersOffset >= 10000) {
+                console.warn('[ml-sync] Limite de offset (10k) atingido em pedidos — parando.')
+                break
+            }
+        }
+        console.log(`[ml-sync] ${rawOrders.length} pedidos encontrados (total API: ${ordersTotal})`)
 
         const mappedOrders = rawOrders.map((o: any) => ({
             user_id: user.id,
@@ -107,23 +133,60 @@ serve(async (req) => {
         }))
 
         if (mappedOrders.length > 0) {
-            const { error: ordErr } = await supabase
-                .from('ml_orders')
-                .upsert(mappedOrders, { onConflict: 'user_id,ml_order_id' })
-            if (ordErr) {
-                console.error('[ml-sync] Erro ao salvar pedidos:', ordErr)
-                throw new Error(`Erro ao salvar pedidos no banco: ${ordErr.message}`)
+            // upsert em lotes de 500 para evitar payloads enormes
+            for (let i = 0; i < mappedOrders.length; i += 500) {
+                const batch = mappedOrders.slice(i, i + 500)
+                const { error: ordErr } = await supabase
+                    .from('ml_orders')
+                    .upsert(batch, { onConflict: 'user_id,ml_order_id' })
+                if (ordErr) {
+                    console.error('[ml-sync] Erro ao salvar pedidos:', ordErr)
+                    throw new Error(`Erro ao salvar pedidos no banco: ${ordErr.message}`)
+                }
             }
         }
 
-        // ── 3. Anúncios ───────────────────────────────────────────────
-        console.log('[ml-sync] Buscando anúncios...')
-        const itemsRes = await fetch(
-            `https://api.mercadolibre.com/users/${sellerId}/items/search`,
-            { headers: { 'Authorization': `Bearer ${accessToken}` } }
-        )
-        const itemsJson = await itemsRes.json()
-        const itemIds: string[] = itemsJson.results || []
+        // ── 3. Anúncios — com PAGINAÇÃO (offset/limit; troca p/ scan se >1000) ─
+        console.log('[ml-sync] Buscando anúncios (paginado)...')
+        const itemIds: string[] = []
+        const ITEMS_PAGE_SIZE = 100 // máx aceito pelo endpoint
+        let itemsOffset = 0
+        let itemsTotal = 0
+        let useScan = false
+        let scrollId: string | null = null
+
+        while (true) {
+            const baseUrl = `https://api.mercadolibre.com/users/${sellerId}/items/search`
+            const url = useScan
+                ? `${baseUrl}?search_type=scan&limit=${ITEMS_PAGE_SIZE}${scrollId ? `&scroll_id=${scrollId}` : ''}`
+                : `${baseUrl}?offset=${itemsOffset}&limit=${ITEMS_PAGE_SIZE}`
+            const itemsRes = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            })
+            if (!itemsRes.ok) {
+                const errText = await itemsRes.text()
+                console.warn('[ml-sync] items/search erro:', itemsRes.status, errText.slice(0, 300))
+                break
+            }
+            const itemsJson = await itemsRes.json()
+            const pageResults: string[] = itemsJson.results || []
+            itemsTotal = itemsJson.paging?.total ?? itemsTotal
+            itemIds.push(...pageResults)
+            console.log(`[ml-sync] anúncios: ${useScan ? 'scan' : `offset=${itemsOffset}`}, página=${pageResults.length}, acumulado=${itemIds.length}/${itemsTotal}`)
+            if (pageResults.length < ITEMS_PAGE_SIZE) break
+            // Se vamos passar de 1000 com offset, alterna para scan (limite ML)
+            if (!useScan) {
+                itemsOffset += ITEMS_PAGE_SIZE
+                if (itemsOffset >= 1000 && itemsTotal > 1000) {
+                    console.log('[ml-sync] Mudando para search_type=scan (>1000 anúncios)')
+                    useScan = true
+                    scrollId = itemsJson.scroll_id || null
+                }
+            } else {
+                scrollId = itemsJson.scroll_id || null
+                if (!scrollId) break
+            }
+        }
         console.log(`[ml-sync] ${itemIds.length} anúncios encontrados`)
 
         let mappedAds: any[] = []
@@ -169,21 +232,24 @@ serve(async (req) => {
                 mappedAds = [...mappedAds, ...chunkAds]
             }
 
-            // ── 4. Visitas ─────────────────────────────────────────────
-            // Endpoint correto: /items/visits?ids=MLB1,MLB2&date_from=...&date_to=...
-            console.log('[ml-sync] Buscando visitas...')
-            try {
-                const visitsRes = await fetch(
-                    `https://api.mercadolibre.com/items/visits?ids=${itemIds.slice(0, 50).join(',')}&date_from=${thirtyDaysAgo}&date_to=${today}`,
-                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
-                )
-                console.log(`[ml-sync] Visitas status: ${visitsRes.status}`)
-
-                if (visitsRes.ok) {
+            // ── 4. Visitas — em chunks de 50 ids ───────────────────────
+            // Endpoint: /items/visits?ids=MLB1,MLB2&date_from=...&date_to=...
+            console.log('[ml-sync] Buscando visitas (em chunks)...')
+            const VISITS_CHUNK = 50
+            for (let i = 0; i < itemIds.length; i += VISITS_CHUNK) {
+                const chunkIds = itemIds.slice(i, i + VISITS_CHUNK)
+                try {
+                    const visitsRes = await fetch(
+                        `https://api.mercadolibre.com/items/visits?ids=${chunkIds.join(',')}&date_from=${thirtyDaysAgo}&date_to=${today}`,
+                        { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                    )
+                    if (!visitsRes.ok) {
+                        const errText = await visitsRes.text()
+                        console.warn(`[ml-sync] Visitas chunk ${i} erro:`, visitsRes.status, errText.slice(0, 200))
+                        continue
+                    }
                     const visitsData = await visitsRes.json()
-                    console.log('[ml-sync] Visitas sample:', JSON.stringify(visitsData).slice(0, 300))
-
-                    // Resposta pode ser array [{item_id, total_visits}] ou objeto {"MLB123": N}
+                    // Resposta pode vir como array [{item_id,total_visits}] ou objeto {"MLB123":N}
                     if (Array.isArray(visitsData)) {
                         visitsData.forEach((v: any) => {
                             const itemId = v.item_id || v.id
@@ -196,12 +262,9 @@ serve(async (req) => {
                             if (ad) ad.visits = Number(val?.total_visits ?? val ?? 0)
                         })
                     }
-                } else {
-                    const errText = await visitsRes.text()
-                    console.warn('[ml-sync] Visitas erro:', visitsRes.status, errText.slice(0, 200))
+                } catch (vErr) {
+                    console.error(`[ml-sync] Erro ao buscar visitas chunk ${i}:`, vErr)
                 }
-            } catch (vErr) {
-                console.error('[ml-sync] Erro ao buscar visitas:', vErr)
             }
 
             // ── 5. Product Ads (métricas de publicidade) ───────────────
@@ -225,37 +288,45 @@ serve(async (req) => {
                     if (advertiserId) {
                         console.log(`[ml-sync] advertiser_id: ${advertiserId}`)
 
-                        // 5b. Buscar ads com métricas por período
-                        const adsMetricsRes = await fetch(
-                            `https://api.mercadolibre.com/marketplace/advertising/MLB/advertisers/${advertiserId}/product_ads/ads?date_from=${sevenDaysAgo}&date_to=${today}&metrics=clicks,prints,cost,direct_amount,acos,ctr&limit=50`,
-                            { headers: { 'Authorization': `Bearer ${accessToken}` } }
-                        )
-                        console.log(`[ml-sync] Ads metrics status: ${adsMetricsRes.status}`)
-
-                        if (adsMetricsRes.ok) {
+                        // 5b. Buscar ads com métricas por período (PAGINADO)
+                        const ADS_PAGE = 50
+                        let adsOffset = 0
+                        let adsTotal = 0
+                        const allAdsMetrics: any[] = []
+                        while (true) {
+                            const adsMetricsRes = await fetch(
+                                `https://api.mercadolibre.com/marketplace/advertising/MLB/advertisers/${advertiserId}/product_ads/ads?date_from=${sevenDaysAgo}&date_to=${today}&metrics=clicks,prints,cost,direct_amount,acos,ctr&limit=${ADS_PAGE}&offset=${adsOffset}`,
+                                { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                            )
+                            console.log(`[ml-sync] Ads metrics offset=${adsOffset} status=${adsMetricsRes.status}`)
+                            if (!adsMetricsRes.ok) {
+                                const errBody = await adsMetricsRes.text()
+                                console.warn('[ml-sync] Ads metrics erro:', adsMetricsRes.status, errBody.slice(0, 300))
+                                break
+                            }
                             const adsMetricsData = await adsMetricsRes.json()
-                            console.log('[ml-sync] Ads metrics sample:', JSON.stringify(adsMetricsData).slice(0, 500))
-
                             const adsArray = adsMetricsData.results || adsMetricsData.ads || (Array.isArray(adsMetricsData) ? adsMetricsData : [])
-
-                            adsArray.forEach((adMetric: any) => {
-                                // O item_id pode estar em diferentes campos
-                                const itemId = adMetric.item_id || adMetric.product_id || adMetric.ad_id
-                                const ad = mappedAds.find((a: any) => a.ml_item_id === itemId)
-                                if (ad) {
-                                    const m = adMetric.metrics || adMetric
-                                    ad.impressions = Number(m.prints || m.impressions || 0)
-                                    ad.clicks = Number(m.clicks || 0)
-                                    ad.cost = Number(m.cost || 0)
-                                    ad.ad_sales = Number(m.direct_amount || m.total_amount || m.ad_sales || 0)
-                                    ad.acos = Number(m.acos || 0)
-                                    ad.ctr = Number(m.ctr || 0)
-                                }
-                            })
-                        } else {
-                            const errBody = await adsMetricsRes.text()
-                            console.warn('[ml-sync] Ads metrics erro:', adsMetricsRes.status, errBody.slice(0, 300))
+                            adsTotal = adsMetricsData.paging?.total ?? adsTotal
+                            allAdsMetrics.push(...adsArray)
+                            if (adsArray.length < ADS_PAGE) break
+                            adsOffset += ADS_PAGE
+                            if (adsOffset >= 5000) break // segurança
                         }
+                        console.log(`[ml-sync] Product Ads coletados: ${allAdsMetrics.length}/${adsTotal}`)
+
+                        allAdsMetrics.forEach((adMetric: any) => {
+                            const itemId = adMetric.item_id || adMetric.product_id || adMetric.ad_id
+                            const ad = mappedAds.find((a: any) => a.ml_item_id === itemId)
+                            if (ad) {
+                                const m = adMetric.metrics || adMetric
+                                ad.impressions = Number(m.prints || m.impressions || 0)
+                                ad.clicks = Number(m.clicks || 0)
+                                ad.cost = Number(m.cost || 0)
+                                ad.ad_sales = Number(m.direct_amount || m.total_amount || m.ad_sales || 0)
+                                ad.acos = Number(m.acos || 0)
+                                ad.ctr = Number(m.ctr || 0)
+                            }
+                        })
                     } else {
                         console.warn('[ml-sync] Nenhum advertiser_id encontrado. O seller pode não ter Product Ads ativos.')
                     }
@@ -267,14 +338,17 @@ serve(async (req) => {
                 console.error('[ml-sync] Erro ao buscar Product Ads:', adsErr)
             }
 
-            // ── 6. Salvar anúncios ─────────────────────────────────────
+            // ── 6. Salvar anúncios (em lotes) ──────────────────────────
             if (mappedAds.length > 0) {
-                const { error: adErr } = await supabase
-                    .from('ml_ads')
-                    .upsert(mappedAds, { onConflict: 'user_id,ml_item_id' })
-                if (adErr) {
-                    console.error('[ml-sync] Erro ao salvar anúncios:', adErr)
-                    throw new Error(`Erro ao salvar anúncios no banco: ${adErr.message}`)
+                for (let i = 0; i < mappedAds.length; i += 500) {
+                    const batch = mappedAds.slice(i, i + 500)
+                    const { error: adErr } = await supabase
+                        .from('ml_ads')
+                        .upsert(batch, { onConflict: 'user_id,ml_item_id' })
+                    if (adErr) {
+                        console.error('[ml-sync] Erro ao salvar anúncios:', adErr)
+                        throw new Error(`Erro ao salvar anúncios no banco: ${adErr.message}`)
+                    }
                 }
             }
         }
