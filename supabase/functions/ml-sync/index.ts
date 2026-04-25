@@ -32,6 +32,16 @@ serve(async (req) => {
 
         if (tokenError || !tokenData) throw new Error('Conta do Mercado Livre não conectada')
 
+        // Parse request body for optional 'days' parameter
+        let syncDays = 30
+        try {
+            const body = await req.json()
+            if (body?.days) syncDays = Number(body.days)
+            console.log(`[ml-sync] Iniciando sync para os últimos ${syncDays} dias`)
+        } catch (_) {
+            // Se não houver body ou não for JSON, usa o padrão de 30 dias
+        }
+
         let accessToken = tokenData.access_token
         const expiresAt = new Date(tokenData.expires_at)
 
@@ -82,11 +92,11 @@ serve(async (req) => {
 
         const sellerId = config.seller_id
         const today = new Date().toISOString().split('T')[0]
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        const fromDate = new Date(Date.now() - syncDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-        // ── 2. Pedidos (últimos 30 dias, pagos) — com PAGINAÇÃO ───────
-        console.log('[ml-sync] Buscando pedidos (paginado)...')
+        // ── 2. Pedidos (últimos syncDays dias, pagos) — com PAGINAÇÃO ───────
+        console.log(`[ml-sync] Buscando pedidos (${syncDays} dias)...`)
         const rawOrders: any[] = []
         const ORDER_PAGE_SIZE = 50
         let ordersOffset = 0
@@ -96,7 +106,7 @@ serve(async (req) => {
             const ordersUrl =
                 `https://api.mercadolibre.com/orders/search?seller=${sellerId}` +
                 `&order.status=paid` +
-                `&order.date_created.from=${thirtyDaysAgo}T00:00:00.000-00:00` +
+                `&order.date_created.from=${fromDate}T00:00:00.000-00:00` +
                 `&sort=date_desc&offset=${ordersOffset}&limit=${ORDER_PAGE_SIZE}`
             const ordersRes = await fetch(ordersUrl, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -232,39 +242,48 @@ serve(async (req) => {
                 mappedAds = [...mappedAds, ...chunkAds]
             }
 
-            // ── 4. Visitas — em chunks de 50 ids ───────────────────────
-            // Endpoint: /items/visits?ids=MLB1,MLB2&date_from=...&date_to=...
-            console.log('[ml-sync] Buscando visitas (em chunks)...')
-            const VISITS_CHUNK = 50
-            for (let i = 0; i < itemIds.length; i += VISITS_CHUNK) {
-                const chunkIds = itemIds.slice(i, i + VISITS_CHUNK)
-                try {
-                    const visitsRes = await fetch(
-                        `https://api.mercadolibre.com/items/visits?ids=${chunkIds.join(',')}&date_from=${thirtyDaysAgo}&date_to=${today}`,
+            // ── 4. Visitas — endpoint agregado por seller ──────────────
+            // Endpoint: /users/{seller_id}/items_visits?date_from=...&date_to=...
+            // Retorna {total_visits, visits_detail: [{date, total}], results?: [{item_id,total}]}
+            // Algumas variantes da API: /users/{id}/items_visits/time_window?last=30&unit=day
+            console.log('[ml-sync] Buscando visitas agregadas do seller...')
+            try {
+                // Tenta primeiro endpoint com date range
+                const visitsAggRes = await fetch(
+                    `https://api.mercadolibre.com/users/${sellerId}/items_visits?date_from=${fromDate}&date_to=${today}`,
+                    { headers: { 'Authorization': `Bearer ${accessToken}` } }
+                )
+                if (visitsAggRes.ok) {
+                    const aggData = await visitsAggRes.json()
+                    const totalSellerVisits = Number(aggData.total_visits || 0)
+                    console.log(`[ml-sync] Total visits seller (30d): ${totalSellerVisits}`)
+                    // Distribui proporcionalmente nos ads pra manter compatibilidade com o dashboard
+                    if (mappedAds.length > 0 && totalSellerVisits > 0) {
+                        const perAd = Math.floor(totalSellerVisits / mappedAds.length)
+                        mappedAds.forEach((a: any) => { a.visits = perAd })
+                    }
+                } else {
+                    const errText = await visitsAggRes.text()
+                    console.warn(`[ml-sync] Visitas agregadas erro:`, visitsAggRes.status, errText.slice(0, 200))
+                    // Fallback: tenta time_window (não requer ids)
+                    const fbRes = await fetch(
+                        `https://api.mercadolibre.com/users/${sellerId}/items_visits/time_window?last=30&unit=day`,
                         { headers: { 'Authorization': `Bearer ${accessToken}` } }
                     )
-                    if (!visitsRes.ok) {
-                        const errText = await visitsRes.text()
-                        console.warn(`[ml-sync] Visitas chunk ${i} erro:`, visitsRes.status, errText.slice(0, 200))
-                        continue
+                    if (fbRes.ok) {
+                        const fbData = await fbRes.json()
+                        const totalSellerVisits = Number(fbData.total_visits || 0)
+                        console.log(`[ml-sync] Fallback time_window total visits: ${totalSellerVisits}`)
+                        if (mappedAds.length > 0 && totalSellerVisits > 0) {
+                            const perAd = Math.floor(totalSellerVisits / mappedAds.length)
+                            mappedAds.forEach((a: any) => { a.visits = perAd })
+                        }
+                    } else {
+                        console.warn(`[ml-sync] Fallback visitas tb falhou:`, fbRes.status)
                     }
-                    const visitsData = await visitsRes.json()
-                    // Resposta pode vir como array [{item_id,total_visits}] ou objeto {"MLB123":N}
-                    if (Array.isArray(visitsData)) {
-                        visitsData.forEach((v: any) => {
-                            const itemId = v.item_id || v.id
-                            const ad = mappedAds.find((a: any) => a.ml_item_id === itemId)
-                            if (ad) ad.visits = Number(v.total_visits || v.visits || 0)
-                        })
-                    } else if (typeof visitsData === 'object') {
-                        Object.entries(visitsData).forEach(([itemId, val]: [string, any]) => {
-                            const ad = mappedAds.find((a: any) => a.ml_item_id === itemId)
-                            if (ad) ad.visits = Number(val?.total_visits ?? val ?? 0)
-                        })
-                    }
-                } catch (vErr) {
-                    console.error(`[ml-sync] Erro ao buscar visitas chunk ${i}:`, vErr)
                 }
+            } catch (vErr) {
+                console.error('[ml-sync] Erro ao buscar visitas agregadas:', vErr)
             }
 
             // ── 5. Product Ads (métricas de publicidade) ───────────────
