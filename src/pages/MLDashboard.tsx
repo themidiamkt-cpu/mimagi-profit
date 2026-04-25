@@ -261,7 +261,7 @@ const MLDashboard = () => {
                     <CardContent>
                         <div className="text-2xl font-bold">{data?.summary.totalOrders || 0}</div>
                         <p className="text-xs text-muted-foreground">
-                            Análise dos últimos 30 dias
+                            No período selecionado
                         </p>
                     </CardContent>
                 </Card>
