@@ -26,6 +26,10 @@ serve(async (req) => {
         const body = await req.json()
         const { code, refresh_token } = body
 
+        if (!code && !refresh_token) {
+            throw new Error('Faltou o parâmetro "code" (ou "refresh_token") no corpo da requisição.')
+        }
+
         // 1. Get Config (explicitly naming columns to avoid failure if some are missing)
         const { data: config, error: configError } = await supabaseClient
             .from('ml_config')
