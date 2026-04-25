@@ -23,6 +23,18 @@ serve(async (req) => {
         const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
         if (userError || !user) throw new Error('Invalid user token')
 
+        // Parse request body for optional date range parameters
+        let dateFrom: string | null = null
+        let dateTo: string | null = null
+
+        try {
+            const body = await req.json()
+            if (body?.from) dateFrom = body.from
+            if (body?.to) dateTo = body.to
+        } catch (_) {
+            // Se não houver body, usa o padrão de 30 dias abaixo
+        }
+
         // Fetch real data from database
         const { data: orders } = await supabaseClient
             .from('ml_orders')
@@ -36,6 +48,18 @@ serve(async (req) => {
             .eq('user_id', user.id)
             .order('stock_quantity', { ascending: true })
 
+        // Filtro de período para o Resumo
+        const now = new Date()
+        const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        const finalFrom = dateFrom ? new Date(dateFrom).toISOString() : defaultFrom
+        const finalTo = dateTo ? new Date(dateTo).toISOString() : now.toISOString()
+
+        const filteredOrders = (orders || []).filter(order =>
+            order.order_date && order.order_date >= finalFrom && order.order_date <= finalTo
+        )
+
+        const totalOrders = filteredOrders.length
+        const revenue = filteredOrders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0)
         // Tenta com last_error; se a coluna ainda não existe, faz fallback
         let syncMeta: any = null
         const r1 = await supabaseClient
@@ -54,14 +78,6 @@ serve(async (req) => {
             syncMeta = r1.data
         }
 
-        const now = new Date()
-        // Últimos 30 dias (não início do mês — evita zerar ao virar o mês)
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-
-        const last30Orders = (orders || []).filter(order => order.order_date && order.order_date >= thirtyDaysAgo)
-
-        const totalOrders = last30Orders.length
-        const revenue = last30Orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0)
         // Pedidos pendentes = aguardando envio (confirmed) ou pagamento pendente
         const pendingOrders = orders?.filter(order =>
             order.status === 'confirmed' || order.status === 'payment_required'

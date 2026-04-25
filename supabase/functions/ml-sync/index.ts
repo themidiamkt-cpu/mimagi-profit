@@ -110,7 +110,6 @@ serve(async (req) => {
         while (true) {
             const ordersUrl =
                 `https://api.mercadolibre.com/orders/search?seller=${sellerId}` +
-                `&order.status=paid` +
                 `&order.date_created.from=${fromDate}T00:00:00.000-00:00` +
                 `&sort=date_desc&offset=${ordersOffset}&limit=${ORDER_PAGE_SIZE}`
             const ordersRes = await fetch(ordersUrl, {

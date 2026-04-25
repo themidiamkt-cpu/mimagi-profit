@@ -49,9 +49,12 @@ interface DashboardData {
     };
 }
 
+import { useDashboardContext } from "@/contexts/DashboardContext";
+
 const MLDashboard = () => {
     const { toast } = useToast();
     const navigate = useNavigate();
+    const { startDate, endDate, selectedLabel } = useDashboardContext();
     const [isLoading, setIsLoading] = useState(true);
     const [isConfigured, setIsConfigured] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -74,7 +77,9 @@ const MLDashboard = () => {
             setIsConfigured(!!config);
 
             if (config) {
-                const { data: dashboardData, error: dashboardError } = await supabase.functions.invoke('ml-dashboard');
+                const { data: dashboardData, error: dashboardError } = await supabase.functions.invoke('ml-dashboard', {
+                    body: { from: startDate, to: endDate }
+                });
                 if (dashboardError) throw dashboardError;
                 setData(dashboardData);
             } else {
@@ -111,7 +116,7 @@ const MLDashboard = () => {
 
     useEffect(() => {
         fetchData();
-    }, [toast]);
+    }, [toast, startDate, endDate]);
 
     const handleSync = async (options: { days?: number, date_from?: string, date_to?: string } = { days: 30 }) => {
         try {
