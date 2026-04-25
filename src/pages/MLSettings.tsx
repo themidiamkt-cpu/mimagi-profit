@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Eye, EyeOff, ExternalLink, CheckCircle2, AlertCircle, Loader2, ShieldAlert } from "lucide-react";
+import { Eye, EyeOff, ExternalLink, CheckCircle2, AlertCircle, Loader2, ShieldAlert, RotateCcw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -144,6 +144,28 @@ const MLSettings = () => {
                 description: error.message,
                 variant: "destructive",
             });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleReset = async () => {
+        if (!confirm("Tem certeza? Isso apaga tokens e PKCE atuais. Você precisará reautorizar.")) return;
+        try {
+            setIsLoading(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("Usuário não autenticado");
+            await supabase.from('ml_tokens').delete().eq('user_id', user.id);
+            await supabase.from('ml_config').update({ code_verifier: null, seller_id: null, account_name: null }).eq('user_id', user.id);
+            await supabase.from('ml_sync_meta').delete().eq('user_id', user.id);
+            setStatus("saved");
+            setAccountName("");
+            toast({
+                title: "Conexão resetada",
+                description: "Agora clique em 'Autorizar com ML' para conectar de novo.",
+            });
+        } catch (error: any) {
+            toast({ title: "Erro ao resetar", description: error.message, variant: "destructive" });
         } finally {
             setIsLoading(false);
         }
@@ -309,6 +331,17 @@ const MLSettings = () => {
                                         Testar conexão
                                     </Button>
                                 </div>
+                                {status === "connected" && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleReset}
+                                        disabled={isLoading}
+                                        className="w-full border-red-300 text-red-700 hover:bg-red-50"
+                                    >
+                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                        Resetar conexão (limpar tokens e PKCE)
+                                    </Button>
+                                )}
                             </div>
                         </CardContent>
                     </Card>

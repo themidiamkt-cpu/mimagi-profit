@@ -110,7 +110,10 @@ serve(async (req) => {
             const { error: ordErr } = await supabase
                 .from('ml_orders')
                 .upsert(mappedOrders, { onConflict: 'user_id,ml_order_id' })
-            if (ordErr) console.error('[ml-sync] Erro ao salvar pedidos:', ordErr)
+            if (ordErr) {
+                console.error('[ml-sync] Erro ao salvar pedidos:', ordErr)
+                throw new Error(`Erro ao salvar pedidos no banco: ${ordErr.message}`)
+            }
         }
 
         // ── 3. Anúncios ───────────────────────────────────────────────
@@ -269,19 +272,30 @@ serve(async (req) => {
                 const { error: adErr } = await supabase
                     .from('ml_ads')
                     .upsert(mappedAds, { onConflict: 'user_id,ml_item_id' })
-                if (adErr) console.error('[ml-sync] Erro ao salvar anúncios:', adErr)
+                if (adErr) {
+                    console.error('[ml-sync] Erro ao salvar anúncios:', adErr)
+                    throw new Error(`Erro ao salvar anúncios no banco: ${adErr.message}`)
+                }
             }
         }
 
         // ── 7. Atualizar metadados de sync ────────────────────────────
-        await supabase.from('ml_sync_meta').upsert({
+        // Tenta com last_error; se a coluna ainda não existe, faz fallback
+        const metaPayload: any = {
             user_id: user.id,
             status: 'done',
             last_sync: new Date().toISOString(),
             total_orders: mappedOrders.length,
             total_ads: itemIds.length,
             updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' })
+        }
+        const { error: metaErr } = await supabase
+            .from('ml_sync_meta')
+            .upsert({ ...metaPayload, last_error: null }, { onConflict: 'user_id' })
+        if (metaErr) {
+            // Fallback se coluna last_error ainda não existe
+            await supabase.from('ml_sync_meta').upsert(metaPayload, { onConflict: 'user_id' })
+        }
 
         console.log('[ml-sync] Concluído ✓')
         return new Response(JSON.stringify({
@@ -295,6 +309,32 @@ serve(async (req) => {
 
     } catch (error: any) {
         console.error('[ml-sync] Erro fatal:', error.message)
+        // Tenta gravar o erro em ml_sync_meta para o dashboard exibir
+        try {
+            const supabase = createClient(
+                Deno.env.get('SUPABASE_URL') ?? '',
+                Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+            )
+            const authHeader = req.headers.get('Authorization')
+            if (authHeader) {
+                const token = authHeader.replace('Bearer ', '')
+                const { data: { user } } = await supabase.auth.getUser(token)
+                if (user) {
+                    const errPayload: any = {
+                        user_id: user.id,
+                        status: 'error',
+                        updated_at: new Date().toISOString(),
+                    }
+                    const { error: e1 } = await supabase
+                        .from('ml_sync_meta')
+                        .upsert({ ...errPayload, last_error: String(error.message).slice(0, 500) }, { onConflict: 'user_id' })
+                    if (e1) {
+                        await supabase.from('ml_sync_meta').upsert(errPayload, { onConflict: 'user_id' })
+                    }
+                }
+            }
+        } catch (_) { /* swallow */ }
+
         return new Response(JSON.stringify({
             success: false,
             error: error.message

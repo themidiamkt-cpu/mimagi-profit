@@ -38,6 +38,13 @@ interface DashboardData {
         ad: string;
     }>;
     chartData: any[];
+    sync?: {
+        status: string;
+        last_sync: string | null;
+        last_error: string | null;
+        total_orders: number;
+        total_ads: number;
+    };
 }
 
 const MLDashboard = () => {
@@ -191,6 +198,26 @@ const MLDashboard = () => {
                         <Link to="/mercadolivre/configuracoes" className="font-bold underline hover:text-yellow-900">
                             Clique aqui para configurar
                         </Link>
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            {data?.sync?.status === 'error' && data?.sync?.last_error && (
+                <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-900">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertTitle className="text-red-900 font-semibold">Última sincronização falhou</AlertTitle>
+                    <AlertDescription className="text-red-800 break-all">
+                        {data.sync.last_error}
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            {data?.sync?.status === 'done' && data.summary.totalOrders === 0 && data.summary.activeAds === 0 && (
+                <Alert className="bg-blue-50 border-blue-200 text-blue-900">
+                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                    <AlertTitle className="text-blue-900 font-semibold">Sincronização concluída sem dados</AlertTitle>
+                    <AlertDescription className="text-blue-800">
+                        A API do ML respondeu mas não retornou pedidos nem anúncios. Possíveis causas: a conta autorizada é de colaborador (não principal), o seller_id não é o dono da loja, ou o app no Mercado Livre Developers não tem os escopos <code>read</code>/<code>write</code>/<code>offline_access</code>. Use o botão "Diagnóstico API" para confirmar.
                     </AlertDescription>
                 </Alert>
             )}

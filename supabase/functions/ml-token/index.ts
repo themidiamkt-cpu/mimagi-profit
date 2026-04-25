@@ -78,7 +78,19 @@ serve(async (req) => {
 
         if (!response.ok) {
             console.error('ML API Error response:', data);
-            throw new Error(data.message || data.error_description || data.error || 'Failed to fetch token from ML API')
+            const code = (data.error || '').toString();
+            const msg = (data.message || data.error_description || data.error || '').toString();
+            // Traduz erros frequentes para algo acionável
+            if (code === 'invalid_grant') {
+                throw new Error(`Mercado Livre rejeitou o código de autorização. Causas comuns: o código já foi usado, expirou, o redirect_uri salvo não bate com o cadastrado no app do ML, ou o code_verifier (PKCE) ficou desalinhado. Solução: na tela de Configurações, clique em "Resetar conexão" e autorize novamente. Detalhe ML: ${msg}`);
+            }
+            if (code === 'invalid_client') {
+                throw new Error(`App ID ou Secret Key incorretos. Confira em developers.mercadolivre.com.br e salve novamente. Detalhe ML: ${msg}`);
+            }
+            if (code === 'forbidden' || code === 'unauthorized_client') {
+                throw new Error(`A conta autorizada não pode ler estes dados (provavelmente é colaborador, não dono). Use a conta principal do vendedor. Detalhe ML: ${msg}`);
+            }
+            throw new Error(`Erro do Mercado Livre [${code || response.status}]: ${msg}`)
         }
 
         const sellerId = data.user_id;

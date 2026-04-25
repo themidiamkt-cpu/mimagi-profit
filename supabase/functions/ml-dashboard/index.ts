@@ -36,14 +36,32 @@ serve(async (req) => {
             .eq('user_id', user.id)
             .order('stock_quantity', { ascending: true })
 
+        // Tenta com last_error; se a coluna ainda não existe, faz fallback
+        let syncMeta: any = null
+        const r1 = await supabaseClient
+            .from('ml_sync_meta')
+            .select('status, last_sync, last_error, total_orders, total_ads')
+            .eq('user_id', user.id)
+            .maybeSingle()
+        if (r1.error) {
+            const r2 = await supabaseClient
+                .from('ml_sync_meta')
+                .select('status, last_sync, total_orders, total_ads')
+                .eq('user_id', user.id)
+                .maybeSingle()
+            syncMeta = r2.data ? { ...r2.data, last_error: null } : null
+        } else {
+            syncMeta = r1.data
+        }
+
         const now = new Date()
         // Últimos 30 dias (não início do mês — evita zerar ao virar o mês)
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-        const last30Orders = orders?.filter(order => order.order_date >= thirtyDaysAgo) || []
+        const last30Orders = (orders || []).filter(order => order.order_date && order.order_date >= thirtyDaysAgo)
 
         const totalOrders = last30Orders.length
-        const revenue = last30Orders.reduce((acc, order) => acc + Number(order.total_amount), 0)
+        const revenue = last30Orders.reduce((acc, order) => acc + Number(order.total_amount || 0), 0)
         // Pedidos pendentes = aguardando envio (confirmed) ou pagamento pendente
         const pendingOrders = orders?.filter(order =>
             order.status === 'confirmed' || order.status === 'payment_required'
@@ -69,20 +87,21 @@ serve(async (req) => {
                 revenueGrowth: 0,
                 ordersGrowth: 0
             },
-            recentOrders: orders?.slice(0, 5).map(order => ({
+            recentOrders: (orders || []).slice(0, 5).map(order => ({
                 id: order.ml_order_id,
                 buyer: order.buyer_nickname || 'N/A',
                 status: order.status,
-                value: `R$ ${order.total_amount.toFixed(2)}`,
-                date: new Date(order.order_date).toLocaleDateString('pt-BR')
-            })) || [],
-            lowStockAds: ads?.filter(ad => ad.stock_quantity < 5).map(ad => ({
+                value: `R$ ${Number(order.total_amount || 0).toFixed(2)}`,
+                date: order.order_date ? new Date(order.order_date).toLocaleDateString('pt-BR') : '-'
+            })),
+            lowStockAds: (ads || []).filter(ad => Number(ad.stock_quantity || 0) < 5).map(ad => ({
                 title: ad.title,
                 sku: ad.sku || 'N/A',
-                qty: ad.stock_quantity
-            })) || [],
+                qty: Number(ad.stock_quantity || 0)
+            })),
             unansweredQuestions: [], // Need a table for questions if real
-            chartData: []
+            chartData: [],
+            sync: syncMeta || { status: 'never', last_sync: null, last_error: null, total_orders: 0, total_ads: 0 }
         }
 
         return new Response(JSON.stringify(dashboardData), {
