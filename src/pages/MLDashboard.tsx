@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ShoppingCart, TrendingUp, Clock, Package, Eye, MessageSquare, Loader2, Settings, Bug } from "lucide-react";
+import { AlertCircle, ShoppingCart, TrendingUp, Clock, Package, Eye, MessageSquare, Loader2, Settings, Bug, RefreshCw } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
@@ -175,21 +175,10 @@ const MLDashboard = () => {
                 <div className="flex gap-2">
                     {isConfigured && (
                         <div className="flex flex-wrap items-center gap-2">
-                            <AdvancedDatePicker
-                                dateStart={syncRange.start}
-                                dateEnd={syncRange.end}
-                                onRangeSelect={(start, end) => setSyncRange({ start, end })}
-                            />
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleSync({ date_from: syncRange.start, date_to: syncRange.end })}
-                                disabled={isSyncing}
-                                className="border-blue-600 text-blue-700 hover:bg-blue-50"
-                            >
-                                {isSyncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Clock className="w-4 h-4 mr-2" />}
-                                Sincronizar Período
-                            </Button>
+                            <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 px-3 py-1.5 rounded-md">
+                                <RefreshCw className="w-3.5 h-3.5 text-yellow-600 animate-spin" />
+                                <span className="text-xs font-medium text-yellow-800">Sincronização Automática Ativa</span>
+                            </div>
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -198,7 +187,7 @@ const MLDashboard = () => {
                                 className="border-yellow-600 text-yellow-700 hover:bg-yellow-50"
                             >
                                 {isSyncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <TrendingUp className="w-4 h-4 mr-2" />}
-                                Sincronizar (30 dias)
+                                Sincronizar Agora
                             </Button>
                         </div>
                     )}

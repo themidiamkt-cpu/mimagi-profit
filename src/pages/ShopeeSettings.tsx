@@ -31,7 +31,6 @@ const ShopeeSettings = () => {
 
                 const { data: config, error: configError } = await supabase.functions.invoke('shopee-integration', {
                     method: 'GET',
-                    body: {},
                     headers: { 'x-path': 'config' },
                 });
 
@@ -51,7 +50,6 @@ const ShopeeSettings = () => {
                 // Check if token exists
                 const { data: tokenStatus } = await supabase.functions.invoke('shopee-integration', {
                     method: 'GET',
-                    body: {},
                     headers: { 'x-path': 'status' },
                 });
 
@@ -118,7 +116,6 @@ const ShopeeSettings = () => {
 
             const { data, error } = await supabase.functions.invoke('shopee-integration', {
                 method: 'GET',
-                body: {},
                 headers: { 'x-path': 'auth-url' },
             });
 
@@ -145,7 +142,6 @@ const ShopeeSettings = () => {
 
             const { data, error } = await supabase.functions.invoke('shopee-integration', {
                 method: 'GET',
-                body: {},
                 headers: { 'x-path': 'status' },
             });
 

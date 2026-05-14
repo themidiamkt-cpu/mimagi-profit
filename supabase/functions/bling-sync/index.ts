@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { sendSaleWebhook } from "../_shared/saleWebhook.ts"
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -208,7 +209,7 @@ serve(async (req) => {
                 }
 
                 // Log do primeiro pedido para debug de mapeamento
-                if (totalFetched === pedidos.length && mappedRows === undefined) {
+                if (totalFetched === pedidos.length) {
                     console.log(`[SYNC] Exemplo de pedido mapeado para user ${user.id}:`, {
                         id: p.id,
                         numero: p.numero,
@@ -240,6 +241,19 @@ serve(async (req) => {
                 };
             });
 
+            const pedidoIds = mappedRows.map(row => row.id);
+            const { data: existingPedidos, error: existingError } = await supabase
+                .from('bling_pedidos')
+                .select('id')
+                .in('id', pedidoIds);
+
+            if (existingError) {
+                console.warn('[SYNC] Não foi possível verificar pedidos existentes antes do webhook:', existingError);
+            }
+
+            const existingIds = new Set((existingPedidos || []).map((row: any) => Number(row.id)));
+            const rowsToNotify = mappedRows.filter(row => !existingIds.has(Number(row.id)));
+
             const { error: upsertError } = await supabase
                 .from('bling_pedidos')
                 .upsert(mappedRows, {
@@ -250,6 +264,24 @@ serve(async (req) => {
             if (upsertError) {
                 console.error(`[SYNC ERROR] Falha no upsert da página ${currentPage}:`, upsertError);
                 throw new Error(`Erro ao salvar pedidos: ${upsertError.message}`);
+            }
+
+            for (const row of rowsToNotify) {
+                const webhookResult = await sendSaleWebhook(supabase, user.id, {
+                    source: 'bling',
+                    sale: row,
+                    customer: {
+                        bling_id: row.contato_id,
+                        name: row.contato_nome,
+                    },
+                });
+
+                if (webhookResult.ok) {
+                    await supabase
+                        .from('bling_pedidos')
+                        .update({ sent_to_webhook: true })
+                        .eq('id', row.id);
+                }
             }
 
             totalUpserted += mappedRows.length;

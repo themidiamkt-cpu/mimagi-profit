@@ -1,0 +1,143 @@
+export interface ParsedNfe {
+    marca: string;
+    valorTotal: number;
+    dataEmissao: string;
+    parcelas: {
+        numero: string;
+        vencimento: string;
+        valor: number;
+    }[];
+    prazoEstimado: number;
+    qtdPecas: number;
+    numParcelas: number;
+    chaveNfe: string | null;
+}
+
+export function parseNfeXml(xmlString: string): ParsedNfe {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+
+    // Namespace handling (NF-e usually uses http://www.portalfiscal.inf.br/nfe)
+    const nsResolver = (prefix: string) => {
+        const ns: Record<string, string> = {
+            'nfe': 'http://www.portalfiscal.inf.br/nfe'
+        };
+        return ns[prefix] || null;
+    };
+
+    const getElementValue = (path: string) => {
+        const node = xmlDoc.evaluate(path, xmlDoc, nsResolver, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        return node?.textContent || '';
+    };
+
+    // 1. Marca (limpeza básica)
+    let marca = getElementValue("//nfe:emit/nfe:xFant") || getElementValue("//nfe:emit/nfe:xNome") ||
+        getElementValue("//emit/xFant") || getElementValue("//emit/xNome");
+
+    if (marca) {
+        marca = marca.replace(/CONFECCOES|LTDA|S\/A|EIRELI|ME|EPP|IMPORTACAO|EXPORTACAO/gi, '').replace(/\.$/, '').trim();
+    }
+
+    // 2. Valor Total
+    const valorTotalStr = getElementValue("//nfe:total/nfe:ICMSTot/nfe:vNF") || getElementValue("//total/ICMSTot/vNF");
+    const valorTotal = parseFloat(valorTotalStr) || 0;
+
+    // 3. Data Emissao
+    const dhEmi = getElementValue("//nfe:ide/nfe:dhEmi") || getElementValue("//ide/dhEmi") || getElementValue("//nfe:ide/nfe:dEmi") || getElementValue("//ide/dEmi");
+    const dataEmissao = dhEmi ? dhEmi.substring(0, 10) : new Date().toISOString().substring(0, 10);
+
+    // 4. Quantidade de Peças (Soma de qCom apenas para vestuário/calçados)
+    // NCMs de vestuário começam com 61, 62, 63 e calçados com 64. 
+    // Outros NCMs como 48 (papel/sacolas) ou 39 (plástico) são ignorados na contagem de peças.
+    let qtdPecas = 0;
+    const items = xmlDoc.getElementsByTagName("det");
+
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const ncm = item.getElementsByTagName("NCM")[0]?.textContent || "";
+        const qCom = parseFloat(item.getElementsByTagName("qCom")[0]?.textContent || "0");
+
+        // Verifica se o NCM pertence a categorias de vestuário, acessórios de moda ou calçados
+        const isVestuario = ncm.startsWith("61") || ncm.startsWith("62") || ncm.startsWith("63") ||
+            ncm.startsWith("64") || ncm.startsWith("65") || ncm.startsWith("42");
+
+        if (isVestuario) {
+            qtdPecas += qCom;
+        }
+    }
+
+    // Se após o filtro a quantidade for 0, mas existirem itens, talvez os NCMs sejam variados.
+    // Em último caso, se não houver NCMs de vestuário, mantemos 0 para não confundir papelaria com roupa.
+
+    // 5. Parcelas (dup)
+    const parcelas: ParsedNfe['parcelas'] = [];
+    const duplicatasResult = xmlDoc.evaluate("//nfe:cobr/nfe:dup", xmlDoc, nsResolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+    let dupNode = duplicatasResult.iterateNext();
+
+    if (!dupNode) {
+        const fallbackResult = xmlDoc.evaluate("//cobr/dup", xmlDoc, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+        dupNode = fallbackResult.iterateNext();
+    }
+
+    while (dupNode) {
+        const nDup = xmlDoc.evaluate(".//nfe:nDup", dupNode, nsResolver, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.textContent ||
+            xmlDoc.evaluate(".//nDup", dupNode, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.textContent || '';
+        const dVenc = xmlDoc.evaluate(".//nfe:dVenc", dupNode, nsResolver, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.textContent ||
+            xmlDoc.evaluate(".//dVenc", dupNode, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.textContent || '';
+        const vDupStr = xmlDoc.evaluate(".//nfe:vDup", dupNode, nsResolver, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.textContent ||
+            xmlDoc.evaluate(".//vDup", dupNode, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue?.textContent || '0';
+
+        parcelas.push({
+            numero: nDup,
+            vencimento: dVenc,
+            valor: parseFloat(vDupStr) || 0
+        });
+
+        // @ts-ignore
+        dupNode = duplicatasResult.iterateNext();
+    }
+
+    if (parcelas.length === 0) {
+        const dupNodes = xmlDoc.getElementsByTagName("dup");
+        for (let i = 0; i < dupNodes.length; i++) {
+            const node = dupNodes[i];
+            const nDup = node.getElementsByTagName("nDup")[0]?.textContent || '';
+            const dVenc = node.getElementsByTagName("dVenc")[0]?.textContent || '';
+            const vDup = parseFloat(node.getElementsByTagName("vDup")[0]?.textContent || '0');
+            parcelas.push({ numero: nDup, vencimento: dVenc, valor: vDup });
+        }
+    }
+
+    let prazoEstimado = 180;
+    if (parcelas.length > 0) {
+        prazoEstimado = parcelas.length * 30;
+    } else {
+        const lastVenc = new Date(parcelas[parcelas.length - 1]?.vencimento);
+        const emiDate = new Date(dataEmissao);
+        const diffTime = Math.abs(lastVenc.getTime() - emiDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        prazoEstimado = Math.max(30, Math.round(diffDays / 30) * 30);
+    }
+
+    const numParcelas = parcelas.length || 1;
+
+    // 6. Chave NFe (chNFe)
+    let chaveNfe = getElementValue("//nfe:infProt/nfe:chNFe") || getElementValue("//infProt/chNFe");
+    if (!chaveNfe) {
+        const infNfeId = xmlDoc.getElementsByTagName("infNFe")[0]?.getAttribute("Id");
+        if (infNfeId && infNfeId.startsWith("NFe")) {
+            chaveNfe = infNfeId.substring(3);
+        }
+    }
+
+    return {
+        marca,
+        valorTotal,
+        dataEmissao,
+        parcelas,
+        prazoEstimado,
+        qtdPecas,
+        numParcelas,
+        chaveNfe
+    };
+}

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { sendSaleWebhook } from "../_shared/saleWebhook.ts"
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -19,9 +20,25 @@ serve(async (req) => {
 
         const authHeader = req.headers.get('Authorization')
         if (!authHeader) throw new Error('Missing Authorization header')
-        const token = authHeader.replace('Bearer ', '')
-        const { data: { user }, error: userError } = await supabase.auth.getUser(token)
-        if (userError || !user) throw new Error('Invalid user token')
+
+        let user: { id: string } | null = null;
+        let isServiceRole = false;
+
+        // Check if it's the service role calling
+        if (authHeader === `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`) {
+            isServiceRole = true;
+        }
+
+        const body = await req.json().catch(() => ({}));
+
+        if (isServiceRole && body.user_id) {
+            user = { id: body.user_id };
+        } else {
+            const token = authHeader.replace('Bearer ', '')
+            const { data: { user: authUser }, error: userError } = await supabase.auth.getUser(token)
+            if (userError || !authUser) throw new Error('Invalid user token')
+            user = authUser;
+        }
 
         // ── 1. Buscar token ────────────────────────────────────────────
         const { data: tokenData, error: tokenError } = await supabase
@@ -37,15 +54,10 @@ serve(async (req) => {
         let dateFromOverride: string | null = null
         let dateToOverride: string | null = null
 
-        try {
-            const body = await req.json()
-            if (body?.days) syncDays = Number(body.days)
-            if (body?.date_from) dateFromOverride = body.date_from
-            if (body?.date_to) dateToOverride = body.date_to
-            console.log(`[ml-sync] Iniciando sync. Período: ${dateFromOverride || (syncDays + ' dias')} até ${dateToOverride || 'hoje'}`)
-        } catch (_) {
-            // Se não houver body ou não for JSON, usa o padrão
-        }
+        if (body?.days) syncDays = Number(body.days)
+        if (body?.date_from) dateFromOverride = body.date_from
+        if (body?.date_to) dateToOverride = body.date_to
+        console.log(`[ml-sync] Iniciando sync. Período: ${dateFromOverride || (syncDays + ' dias')} até ${dateToOverride || 'hoje'}`)
 
         let accessToken = tokenData.access_token
         const expiresAt = new Date(tokenData.expires_at)
@@ -135,6 +147,18 @@ serve(async (req) => {
         }
         console.log(`[ml-sync] ${rawOrders.length} pedidos encontrados (total API: ${ordersTotal})`)
 
+        const getMlOrderProducts = (order: any) => {
+            const orderItems = Array.isArray(order.order_items) ? order.order_items : []
+            return orderItems.map((orderItem: any) => ({
+                id: orderItem.item?.id || null,
+                name: orderItem.item?.title || orderItem.item?.name || orderItem.item?.description || null,
+                sku: orderItem.item?.seller_sku || orderItem.item?.seller_custom_field || null,
+                quantity: Number(orderItem.quantity || 1),
+                unit_price: Number(orderItem.unit_price || 0),
+                currency: order.currency_id || null,
+            })).filter((product: any) => product.name || product.id)
+        }
+
         const mappedOrders = rawOrders.map((o: any) => ({
             user_id: user.id,
             ml_order_id: o.id.toString(),
@@ -146,16 +170,70 @@ serve(async (req) => {
             updated_at: new Date().toISOString()
         }))
 
+        const webhookSalesByOrderId = new Map(rawOrders.map((o: any) => {
+            const products = getMlOrderProducts(o)
+            const productNames = products.map((product: any) => product.name).filter(Boolean)
+            const mlOrderId = o.id.toString()
+
+            return [mlOrderId, {
+                user_id: user.id,
+                ml_order_id: mlOrderId,
+                status: o.status,
+                total_amount: o.total_amount,
+                currency: o.currency_id,
+                order_date: o.date_created,
+                buyer_nickname: o.buyer?.nickname || 'N/A',
+                product_name: productNames[0] || null,
+                product_names: productNames,
+                products,
+                items: products,
+                updated_at: new Date().toISOString()
+            }]
+        }))
+
         if (mappedOrders.length > 0) {
             // upsert em lotes de 500 para evitar payloads enormes
             for (let i = 0; i < mappedOrders.length; i += 500) {
                 const batch = mappedOrders.slice(i, i + 500)
+                const mlOrderIds = batch.map((order: any) => order.ml_order_id)
+                const { data: existingOrders, error: existingOrdersError } = await supabase
+                    .from('ml_orders')
+                    .select('ml_order_id')
+                    .eq('user_id', user.id)
+                    .in('ml_order_id', mlOrderIds)
+
+                if (existingOrdersError) {
+                    console.warn('[ml-sync] Não foi possível verificar pedidos existentes antes do webhook:', existingOrdersError)
+                }
+
+                const existingIds = new Set((existingOrders || []).map((order: any) => String(order.ml_order_id)))
+                const ordersToNotify = batch.filter((order: any) => !existingIds.has(String(order.ml_order_id)))
+
                 const { error: ordErr } = await supabase
                     .from('ml_orders')
                     .upsert(batch, { onConflict: 'user_id,ml_order_id' })
                 if (ordErr) {
                     console.error('[ml-sync] Erro ao salvar pedidos:', ordErr)
                     throw new Error(`Erro ao salvar pedidos no banco: ${ordErr.message}`)
+                }
+
+                for (const order of ordersToNotify) {
+                    const salePayload = webhookSalesByOrderId.get(order.ml_order_id) || order
+                    const webhookResult = await sendSaleWebhook(supabase, user.id, {
+                        source: 'mercado_livre',
+                        sale: salePayload as Record<string, unknown>,
+                        customer: {
+                            nickname: order.buyer_nickname,
+                        },
+                    })
+
+                    if (webhookResult.ok) {
+                        await supabase
+                            .from('ml_orders')
+                            .update({ sent_to_webhook: true })
+                            .eq('user_id', user.id)
+                            .eq('ml_order_id', order.ml_order_id)
+                    }
                 }
             }
         }

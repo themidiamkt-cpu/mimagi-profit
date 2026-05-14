@@ -11,6 +11,7 @@ import { Search, Plus, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
+import { notifySaleWebhook } from "@/lib/saleWebhook";
 
 interface Order {
   id: string;
@@ -113,14 +114,26 @@ export const GrowthOrders = () => {
           })
           .eq("id", editingOrder.id));
       } else {
-        ({ error } = await supabase
+        const { data: insertedOrder, error: insertError } = await (supabase as any)
           .from("orders")
           .insert([{
             customer_id: formData.customer_id,
             order_date: formData.order_date,
             total: parseFloat(formData.total) || 0,
             channel: formData.channel || null,
-          }]));
+          }])
+          .select("*, growth_customers(name, phone)")
+          .single();
+        error = insertError;
+
+        if (!error && insertedOrder) {
+          await notifySaleWebhook({
+            source: "manual",
+            table: "orders",
+            sale: insertedOrder,
+            customer: insertedOrder.growth_customers || null,
+          });
+        }
       }
       if (error) throw error;
       toast.success(editingOrder ? "Pedido atualizado com sucesso!" : "Pedido cadastrado com sucesso!");

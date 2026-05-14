@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { sendSaleWebhook } from "../_shared/saleWebhook.ts"
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -124,10 +125,40 @@ serve(async (req) => {
 
         // 5. Upsert no Banco
         if (mappedPedidos.length > 0) {
+            const pedidoIds = mappedPedidos.map((pedido: any) => pedido.id);
+            const { data: existingPedidos, error: existingError } = await supabase
+                .from('bling_pedidos')
+                .select('id')
+                .in('id', pedidoIds);
+
+            if (existingError) {
+                console.warn('[SHEETS-SYNC] Não foi possível verificar vendas existentes antes do webhook:', existingError);
+            }
+
+            const existingIds = new Set((existingPedidos || []).map((pedido: any) => String(pedido.id)));
+            const pedidosToNotify = mappedPedidos.filter((pedido: any) => !existingIds.has(String(pedido.id)));
+
             const { error: upsertError } = await supabase
                 .from('bling_pedidos')
                 .upsert(mappedPedidos, { onConflict: 'id' });
             if (upsertError) throw upsertError;
+
+            for (const pedido of pedidosToNotify) {
+                const webhookResult = await sendSaleWebhook(supabase, user.id, {
+                    source: 'planilha',
+                    sale: pedido,
+                    customer: {
+                        name: pedido.contato_nome,
+                    },
+                });
+
+                if (webhookResult.ok) {
+                    await supabase
+                        .from('bling_pedidos')
+                        .update({ sent_to_webhook: true })
+                        .eq('id', pedido.id);
+                }
+            }
         }
 
         if (customerUpserts.length > 0) {

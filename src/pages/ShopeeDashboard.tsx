@@ -43,7 +43,6 @@ const ShopeeDashboard = () => {
                 // Check status
                 const { data: statusData, error: statusError } = await supabase.functions.invoke('shopee-integration', {
                     method: 'GET',
-                    body: {},
                     headers: {
                         'x-path': 'status' // I should have implemented path handling better in the function
                     }

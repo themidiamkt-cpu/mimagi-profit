@@ -1,0 +1,6 @@
+/* Styles moved to index.css or handled by Tailwind */
+#root {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
