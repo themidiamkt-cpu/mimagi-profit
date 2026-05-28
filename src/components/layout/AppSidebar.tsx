@@ -115,15 +115,15 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-sidebar-primary flex items-center justify-center rounded">
-            <span className="text-sidebar-primary-foreground font-bold text-lg">M</span>
+            <span className="text-sidebar-primary-foreground font-bold text-lg">P</span>
           </div>
           {!isCollapsed && (
             <div>
               <h1 className="font-bold text-sidebar-foreground text-lg tracking-tight">
-                {profile?.nome_loja || 'MIMAGI'}
+                {profile?.nome_loja || 'Planejamento Loja'}
               </h1>
               <p className="text-xs text-sidebar-foreground/60 uppercase tracking-wider">
-                Profit Planner
+                Planejamento Loja
               </p>
             </div>
           )}

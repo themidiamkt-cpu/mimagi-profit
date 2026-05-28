@@ -1,4 +1,4 @@
--- Tabela para armazenar planejamentos financeiros do Mimagi Profit Planner
+-- Tabela para armazenar planejamentos financeiros do Planejamento Loja
 CREATE TABLE public.planejamentos_financeiros (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),

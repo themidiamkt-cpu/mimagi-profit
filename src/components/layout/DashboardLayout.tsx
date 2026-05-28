@@ -33,7 +33,7 @@ export function DashboardLayout({ children }: Props) {
           <header className="h-12 border-b border-border-subtle flex items-center justify-between px-4 bg-bg-primary shrink-0">
             <div className="flex items-center gap-4">
               {!isTheMidiaMkt && <SidebarTrigger className="text-text-secondary hover:text-text-primary" />}
-              <span className="text-sm text-text-secondary font-medium">Mimagi Profit Planner</span>
+              <span className="text-sm text-text-secondary font-medium">Planejamento Loja</span>
             </div>
             {saving && (
               <div className="flex items-center gap-2 text-sm text-text-tertiary">

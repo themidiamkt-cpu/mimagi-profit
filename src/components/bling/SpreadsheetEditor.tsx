@@ -199,7 +199,7 @@ export function SpreadsheetEditor() {
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filterEmpty(data.itens)), "Itens");
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filterEmpty(data.clientes)), "Clientes");
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filterEmpty(data.produtos)), "Produtos");
-        XLSX.writeFile(wb, `mimagi_planilha_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.writeFile(wb, `planejamento_loja_planilha_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
     const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {

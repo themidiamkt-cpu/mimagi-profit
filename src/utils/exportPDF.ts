@@ -17,7 +17,7 @@ export function exportToPDF(
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text('MIMAGI PROFIT PLANNER', pageWidth / 2, 18, { align: 'center' });
+  doc.text('PLANEJAMENTO LOJA', pageWidth / 2, 18, { align: 'center' });
   
   doc.setTextColor(0, 0, 0);
   y = 45;
@@ -109,5 +109,5 @@ export function exportToPDF(
   doc.setTextColor(128, 128, 128);
   doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, 285, { align: 'center' });
 
-  doc.save('mimagi-profit-planner.pdf');
+  doc.save('planejamento-loja.pdf');
 }

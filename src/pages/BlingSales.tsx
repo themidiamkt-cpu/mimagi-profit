@@ -943,7 +943,7 @@ export function BlingSales() {
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-bold text-gray-900 leading-none">Guia de Configuração Bling API v3</h3>
-                                    <p className="text-sm text-muted-foreground mt-2">Siga estes passos para conectar sua conta à Mimagi Profit.</p>
+                                    <p className="text-sm text-muted-foreground mt-2">Siga estes passos para conectar sua conta ao Planejamento Loja.</p>
                                 </div>
                             </div>
 
