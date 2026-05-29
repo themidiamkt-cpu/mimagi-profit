@@ -8,6 +8,7 @@ import { blingApi } from '@/lib/blingApi';
 import { getCurrentMonthKey } from '@/types/financial';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { getSaoPauloDateString, startOfMonthDateString } from '@/utils/saoPauloDate';
 
 interface ActualMetrics {
   valor_total: number;
@@ -245,12 +246,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   // Estados de data (Mês Atual por padrão)
   const [startDate, setStartDate] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    return startOfMonthDateString(getSaoPauloDateString());
   });
   const [endDate, setEndDate] = useState(() => {
-    const now = new Date();
-    return now.toISOString().split('T')[0];
+    return getSaoPauloDateString();
   });
   const [selectedLabel, setSelectedLabel] = useState('Este Mês');
 

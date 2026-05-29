@@ -1,5 +1,5 @@
 import React from "react";
-import { format, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,16 @@ import {
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DateRange } from "react-day-picker";
+import {
+    addDaysToDateString,
+    dateStringToLocalNoon,
+    dateToLocalDateString,
+    endOfMonthDateString,
+    endOfWeekDateString,
+    getSaoPauloDateString,
+    startOfMonthDateString,
+    startOfWeekDateString,
+} from "@/utils/saoPauloDate";
 
 interface AdvancedDatePickerProps {
     dateStart: string;
@@ -22,28 +32,55 @@ interface AdvancedDatePickerProps {
 }
 
 const presets = [
-    { label: "Hoje", getValue: () => ({ start: new Date(), end: new Date() }) },
-    { label: "Ontem", getValue: () => ({ start: subDays(new Date(), 1), end: subDays(new Date(), 1) }) },
-    { label: "Hoje e ontem", getValue: () => ({ start: subDays(new Date(), 1), end: new Date() }) },
-    { label: "Últimos 7 dias", getValue: () => ({ start: subDays(new Date(), 7), end: new Date() }) },
-    { label: "Últimos 14 dias", getValue: () => ({ start: subDays(new Date(), 14), end: new Date() }) },
-    { label: "Últimos 28 dias", getValue: () => ({ start: subDays(new Date(), 28), end: new Date() }) },
-    { label: "Últimos 30 dias", getValue: () => ({ start: subDays(new Date(), 30), end: new Date() }) },
-    { label: "Esta semana", getValue: () => ({ start: startOfWeek(new Date(), { weekStartsOn: 1 }), end: new Date() }) },
+    { label: "Hoje", getValue: () => {
+        const today = getSaoPauloDateString();
+        return { start: today, end: today };
+    } },
+    { label: "Ontem", getValue: () => {
+        const yesterday = addDaysToDateString(getSaoPauloDateString(), -1);
+        return { start: yesterday, end: yesterday };
+    } },
+    { label: "Hoje e ontem", getValue: () => {
+        const today = getSaoPauloDateString();
+        return { start: addDaysToDateString(today, -1), end: today };
+    } },
+    { label: "Últimos 7 dias", getValue: () => {
+        const today = getSaoPauloDateString();
+        return { start: addDaysToDateString(today, -7), end: today };
+    } },
+    { label: "Últimos 14 dias", getValue: () => {
+        const today = getSaoPauloDateString();
+        return { start: addDaysToDateString(today, -14), end: today };
+    } },
+    { label: "Últimos 28 dias", getValue: () => {
+        const today = getSaoPauloDateString();
+        return { start: addDaysToDateString(today, -28), end: today };
+    } },
+    { label: "Últimos 30 dias", getValue: () => {
+        const today = getSaoPauloDateString();
+        return { start: addDaysToDateString(today, -30), end: today };
+    } },
+    { label: "Esta semana", getValue: () => {
+        const today = getSaoPauloDateString();
+        return { start: startOfWeekDateString(today), end: today };
+    } },
     {
         label: "Semana passada", getValue: () => {
-            const prevWeek = subDays(new Date(), 7);
-            return { start: startOfWeek(prevWeek, { weekStartsOn: 1 }), end: endOfWeek(prevWeek, { weekStartsOn: 1 }) };
+            const previousWeekDay = addDaysToDateString(getSaoPauloDateString(), -7);
+            return { start: startOfWeekDateString(previousWeekDay), end: endOfWeekDateString(previousWeekDay) };
         }
     },
-    { label: "Este mês", getValue: () => ({ start: startOfMonth(new Date()), end: new Date() }) },
+    { label: "Este mês", getValue: () => {
+        const today = getSaoPauloDateString();
+        return { start: startOfMonthDateString(today), end: today };
+    } },
     {
         label: "Mês passado", getValue: () => {
-            const prevMonth = subDays(startOfMonth(new Date()), 1);
-            return { start: startOfMonth(prevMonth), end: endOfMonth(prevMonth) };
+            const previousMonthDay = addDaysToDateString(startOfMonthDateString(getSaoPauloDateString()), -1);
+            return { start: startOfMonthDateString(previousMonthDay), end: endOfMonthDateString(previousMonthDay) };
         }
     },
-    { label: "Máximo", getValue: () => ({ start: new Date("2022-01-01T12:00:00"), end: new Date() }) },
+    { label: "Máximo", getValue: () => ({ start: "2022-01-01", end: getSaoPauloDateString() }) },
 ];
 
 export function AdvancedDatePicker({ dateStart, dateEnd, onRangeSelect, label, compare = false }: AdvancedDatePickerProps) {
@@ -52,8 +89,8 @@ export function AdvancedDatePicker({ dateStart, dateEnd, onRangeSelect, label, c
     const [isCompare, setIsCompare] = React.useState(compare);
 
     const [range, setRange] = React.useState<DateRange | undefined>({
-        from: new Date(dateStart + 'T12:00:00'),
-        to: new Date(dateEnd + 'T12:00:00'),
+        from: dateStringToLocalNoon(dateStart),
+        to: dateStringToLocalNoon(dateEnd),
     });
 
     const formatDate = (dateStr: string) => {
@@ -68,11 +105,9 @@ export function AdvancedDatePicker({ dateStart, dateEnd, onRangeSelect, label, c
 
     const handlePresetClick = (preset: typeof presets[0]) => {
         const { start, end } = preset.getValue();
-        const startStr = start.toISOString().split("T")[0];
-        const endStr = end.toISOString().split("T")[0];
 
-        setRange({ from: start, to: end });
-        onRangeSelect(startStr, endStr, preset.label, isCompare);
+        setRange({ from: dateStringToLocalNoon(start), to: dateStringToLocalNoon(end) });
+        onRangeSelect(start, end, preset.label, isCompare);
         setSelectedLabel(preset.label);
         setOpen(false);
     };
@@ -80,8 +115,8 @@ export function AdvancedDatePicker({ dateStart, dateEnd, onRangeSelect, label, c
     const handleApply = () => {
         if (range?.from && range?.to) {
             onRangeSelect(
-                range.from.toISOString().split("T")[0],
-                range.to.toISOString().split("T")[0],
+                dateToLocalDateString(range.from),
+                dateToLocalDateString(range.to),
                 "Personalizado",
                 isCompare
             );

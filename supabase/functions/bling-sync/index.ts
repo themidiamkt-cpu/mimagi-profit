@@ -8,6 +8,7 @@ const corsHeaders = {
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
 
 async function fetchOrderDetail(id: string, accessToken: string) {
     try {
@@ -23,8 +24,18 @@ async function fetchOrderDetail(id: string, accessToken: string) {
     }
 }
 
-function dateToStr(d: Date): string {
-    return d.toISOString().split('T')[0];
+function saoPauloDateToStr(d = new Date()): string {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: SAO_PAULO_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(d);
+    const year = parts.find(part => part.type === 'year')?.value;
+    const month = parts.find(part => part.type === 'month')?.value;
+    const day = parts.find(part => part.type === 'day')?.value;
+
+    return `${year}-${month}-${day}`;
 }
 
 serve(async (req) => {
@@ -69,7 +80,7 @@ serve(async (req) => {
         const body = await req.json().catch(() => ({}));
         let { dateStart, dateEnd, page } = body;
         dateStart = dateStart || lastSyncAt.split('T')[0];
-        dateEnd = dateEnd || dateToStr(new Date());
+        dateEnd = dateEnd || saoPauloDateToStr();
         let currentPage = page || 1;
 
         console.log(`[SYNC] Iniciando sync incremental: ${dateStart} até ${dateEnd} (Página ${currentPage})`);
@@ -144,14 +155,9 @@ serve(async (req) => {
                 break;
             }
 
-            // Ajuste de data para evitar data futura no Bling (UTC vs Local)
-            const now = new Date();
-            const offset = now.getTimezoneOffset() * 60000;
-            const localToday = new Date(now.getTime() - offset).toISOString().split('T')[0];
-
             // Sem o 'let' aqui pois já foram declarados acima
             dateStart = body.dateStart || lastSyncAt.split('T')[0];
-            dateEnd = body.dateEnd || localToday;
+            dateEnd = body.dateEnd || saoPauloDateToStr();
 
             const params = new URLSearchParams({
                 pagina: String(currentPage),
