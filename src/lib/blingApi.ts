@@ -248,6 +248,31 @@ export const blingApi = {
     },
 
     /**
+     * Revalida no Bling os pedidos salvos como atendidos e atualiza no SaaS
+     * aqueles que foram cancelados, recusados ou voltaram para em aberto.
+     */
+    reconcileCanceledPedidos: async (): Promise<{
+        checked: number;
+        updated: number;
+        skipped: number;
+    }> => {
+        const { data, error } = await supabase.functions.invoke('bling-sync', {
+            body: { action: 'reconcile-canceled' }
+        });
+
+        if (error) {
+            console.error('Erro ao cancelar vendas Bling:', error);
+            throw new Error(error.message || 'Erro ao cancelar vendas');
+        }
+
+        if ((data as any)?.success === false) {
+            throw new Error((data as any).error || 'Erro ao cancelar vendas');
+        }
+
+        return data;
+    },
+
+    /**
      * Retorna os metadados da última sincronização (data, status, total)
      */
     getSyncMeta: async (): Promise<{ last_sync: string; total_rows: number; status: string } | null> => {

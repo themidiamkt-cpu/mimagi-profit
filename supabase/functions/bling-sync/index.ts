@@ -24,6 +24,75 @@ async function fetchOrderDetail(id: string, accessToken: string) {
     }
 }
 
+async function reconcileCanceledOrders(supabase: any, userId: string, accessToken: string) {
+    let checked = 0;
+    let updated = 0;
+    let skipped = 0;
+    let page = 0;
+    const ordersToCheck: Array<{ id: number }> = [];
+
+    while (true) {
+        const { data: localOrders, error } = await supabase
+            .from('bling_pedidos')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('source', 'bling')
+            .eq('situacao_id', 6)
+            .range(page * 100, (page + 1) * 100 - 1);
+
+        if (error) throw new Error('Erro ao buscar pedidos locais: ' + error.message);
+        if (!localOrders || localOrders.length === 0) break;
+
+        ordersToCheck.push(...localOrders);
+        if (localOrders.length < 100) break;
+        page++;
+    }
+
+    for (const order of ordersToCheck) {
+        const detail = await fetchOrderDetail(String(order.id), accessToken);
+        checked++;
+
+        if (!detail) {
+            skipped++;
+            await delay(250);
+            continue;
+        }
+
+        const statusId = detail.situacao?.id ?? null;
+        if (statusId !== 6) {
+            const { error: updateError } = await supabase
+                .from('bling_pedidos')
+                .update({
+                    situacao_id: statusId,
+                    situacao_nome: detail.situacao?.nome ?? detail.situacao?.descricao ?? 'Não atendido',
+                    raw: detail,
+                    synced_at: new Date().toISOString(),
+                })
+                .eq('user_id', userId)
+                .eq('id', order.id);
+
+            if (updateError) throw new Error('Erro ao atualizar pedido cancelado: ' + updateError.message);
+            updated++;
+        }
+
+        await delay(250);
+    }
+
+    const { count } = await supabase
+        .from('bling_pedidos')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+    await supabase.from('bling_sync_meta').upsert({
+        user_id: userId,
+        status: 'done',
+        last_sync: new Date().toISOString(),
+        total_rows: count || 0,
+    }, { onConflict: 'user_id' });
+
+    return { checked, updated, skipped };
+}
+
 function saoPauloDateToStr(d = new Date()): string {
     const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone: SAO_PAULO_TIME_ZONE,
@@ -127,6 +196,18 @@ serve(async (req) => {
                 expires_at: newExp.toISOString(),
                 updated_at: new Date().toISOString(),
             }).eq('user_id', user.id);
+        }
+
+        if (body.action === 'reconcile-canceled') {
+            const result = await reconcileCanceledOrders(supabase, user.id, accessToken);
+
+            return new Response(JSON.stringify({
+                success: true,
+                ...result,
+            }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
         }
 
         // 5. Mapear lojas (canais de venda)
