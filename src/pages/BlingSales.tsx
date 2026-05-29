@@ -24,7 +24,10 @@ import {
     ArrowDown,
     Tag,
     AlertTriangle,
+    Calendar,
+    Filter,
     ArrowRight,
+    Table,
     FileSpreadsheet,
     Power,
     Zap,
@@ -36,11 +39,15 @@ import {
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AdvancedDatePicker } from "@/components/bling/AdvancedDatePicker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { BlingDashboard } from '@/components/bling/BlingDashboard';
 import { SpreadsheetEditor } from '@/components/bling/SpreadsheetEditor';
+import { useDashboardContext } from '@/contexts/DashboardContext';
 import {
+    AreaChart,
+    Area,
     BarChart,
     Bar,
     XAxis,
@@ -49,8 +56,24 @@ import {
     Tooltip,
     ResponsiveContainer
 } from 'recharts';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 export function BlingSales() {
+    const {
+        startDate,
+        endDate,
+        setStartDate,
+        setEndDate,
+        selectedLabel,
+        setSelectedLabel
+    } = useDashboardContext();
+
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [cancelingBlingSales, setCancelingBlingSales] = useState(false);
@@ -58,6 +81,7 @@ export function BlingSales() {
     const [metrics, setMetrics] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [lojaNames, setLojaNames] = useState<Record<string, string>>({});
+    const [isCompare, setIsCompare] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
     const [customerDetails, setCustomerDetails] = useState<any>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
@@ -125,11 +149,11 @@ export function BlingSales() {
         setLoading(true);
         try {
             await fetchBlingConfig();
-            const localPedidos = await blingApi.getLocalPedidos();
+            const localPedidos = await blingApi.getLocalPedidos(startDate, endDate);
             setPedidos(localPedidos);
             // ... resto do fetchData igual
             // 2. Buscar faturamento por marca
-            const salesByBrand = await blingApi.getSalesByBrand();
+            const salesByBrand = await blingApi.getSalesByBrand(startDate, endDate);
             setBrandMetrics(salesByBrand);
 
             // 3. Criar mapa de marcas para o calculateMetrics
@@ -144,7 +168,7 @@ export function BlingSales() {
 
             setMetrics(blingApi.calculateMetrics(localPedidos, lojaNames, selectedBrand || undefined, bMap));
 
-            const products = await blingApi.getSalesByProduct();
+            const products = await blingApi.getSalesByProduct(startDate, endDate);
             setProductMetrics(products);
 
             // Refresh sync meta
@@ -213,7 +237,7 @@ export function BlingSales() {
         try {
             while (attempts < maxAttempts) {
                 toast.loading(`Sincronizando... Página ${currentPage}`, { id: toastId });
-                const result = await blingApi.syncPedidosToLocal(undefined, undefined, currentPage);
+                const result = await blingApi.syncPedidosToLocal(startDate, endDate, currentPage);
 
                 if ((result as any).success === false) {
                     throw new Error((result as any).error || 'Erro interno na função');
@@ -295,7 +319,7 @@ export function BlingSales() {
 
     useEffect(() => {
         fetchData();
-    }, [lojaNames, selectedBrand]);
+    }, [startDate, endDate, lojaNames, selectedBrand]);
 
     const handleCancelBlingSales = async () => {
         const confirmed = window.confirm(
@@ -411,6 +435,18 @@ export function BlingSales() {
                     <p className="text-muted-foreground">Analise seu faturamento, LTV e comportamento de clientes.</p>
                 </div>
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
+                    <AdvancedDatePicker
+                        dateStart={startDate}
+                        dateEnd={endDate}
+                        label={selectedLabel}
+                        compare={isCompare}
+                        onRangeSelect={(start, end, label, compare) => {
+                            setStartDate(start);
+                            setEndDate(end);
+                            setSelectedLabel(label);
+                            setIsCompare(!!compare);
+                        }}
+                    />
                     <Button
                         variant="outline"
                         size="sm"
@@ -527,7 +563,6 @@ export function BlingSales() {
                                                 <th className="p-3">Data</th>
                                                 <th className="p-3">Número</th>
                                                 <th className="p-3">Cliente</th>
-                                                <th className="p-3">Situação</th>
                                                 <th className="p-3 text-right">Valor</th>
                                             </tr>
                                         </thead>
@@ -537,14 +572,6 @@ export function BlingSales() {
                                                     <td className="p-3 text-muted-foreground">{formatDate(p.data)}</td>
                                                     <td className="p-3 font-medium">#{p.numero}</td>
                                                     <td className="p-3 font-medium">{p.contato?.nome}</td>
-                                                    <td className="p-3">
-                                                        <span className={cn(
-                                                            "text-[10px] font-medium px-2 py-0.5 rounded-full",
-                                                            p.situacao_id === 6 ? "bg-success/10 text-success" : "bg-primary/10 text-primary"
-                                                        )}>
-                                                            {p.situacao?.descricao || 'Processado'}
-                                                        </span>
-                                                    </td>
                                                     <td className="p-3 text-right font-medium text-foreground">
                                                         {formatCurrency(p.total)}
                                                     </td>
@@ -552,7 +579,7 @@ export function BlingSales() {
                                             ))}
                                             {filteredPedidos.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={5} className="p-8 text-center text-muted-foreground italic">
+                                                    <td colSpan={4} className="p-8 text-center text-muted-foreground italic">
                                                         Nenhum pedido encontrado para o período ou busca.
                                                     </td>
                                                 </tr>
