@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type DragEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,9 @@ interface GrowthCustomer {
   rfm_segment: string;
   last_purchase_date: string | null;
   venda_origem: string | null;
+  crm_stage?: string | null;
+  lead_source?: string | null;
+  crm_notes?: string | null;
 }
 
 interface LiveCustomerMetrics {
@@ -95,6 +98,14 @@ const RFM_LEGEND = [
 ];
 
 const SIZES = ["RN", "P", "M", "G", "GG", "1", "2", "3", "4", "6", "8", "10", "12", "14", "16"];
+const CRM_STAGES = [
+  { key: "novo", label: "Novo", accent: "border-amber-200 bg-amber-50 text-amber-800" },
+  { key: "contato", label: "Contato", accent: "border-blue-200 bg-blue-50 text-blue-800" },
+  { key: "negociacao", label: "Negociação", accent: "border-purple-200 bg-purple-50 text-purple-800" },
+  { key: "convertido", label: "Convertido", accent: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+  { key: "perdido", label: "Perdido", accent: "border-red-200 bg-red-50 text-red-800" },
+] as const;
+
 const normalizeCustomerName = (value?: string | null) =>
   value?.trim().toLowerCase()
     .normalize('NFD')
@@ -659,6 +670,7 @@ export const GrowthCustomers = () => {
       const metrics = getResolvedCustomerMetrics(c);
       return {
         ...c,
+        crm_stage: c.crm_stage || (metrics.totalOrders > 0 ? "convertido" : "novo"),
         total_orders: metrics.totalOrders,
         total_spent: metrics.totalSpent,
         ltv: metrics.ltv,
@@ -683,6 +695,64 @@ export const GrowthCustomers = () => {
       return matchesSearch && matchesSegment;
     })
     .sort((a, b) => b.ltv - a.ltv);
+
+  const crmMetrics = useMemo(() => {
+    const counts = CRM_STAGES.reduce<Record<string, number>>((acc, stage) => {
+      acc[stage.key] = 0;
+      return acc;
+    }, {});
+
+    resolvedCustomers.forEach((customer) => {
+      const stage = customer.crm_stage || "novo";
+      counts[stage] = (counts[stage] || 0) + 1;
+    });
+
+    const total = resolvedCustomers.length;
+    const converted = counts.convertido || 0;
+
+    return {
+      total,
+      counts,
+      conversionRate: total > 0 ? Math.round((converted / total) * 100) : 0,
+      pipelineValue: resolvedCustomers
+        .filter(customer => (customer.crm_stage || "novo") !== "perdido")
+        .reduce((sum, customer) => sum + Number(customer.ltv || customer.total_spent || 0), 0),
+    };
+  }, [resolvedCustomers]);
+
+  const crmCustomersByStage = useMemo(() => {
+    return CRM_STAGES.reduce<Record<string, GrowthCustomer[]>>((acc, stage) => {
+      acc[stage.key] = filteredCustomers.filter(customer => (customer.crm_stage || "novo") === stage.key);
+      return acc;
+    }, {});
+  }, [filteredCustomers]);
+
+  const handleCrmStageChange = async (customerId: string, stage: string) => {
+    const previousCustomers = customers;
+
+    setCustomers(prev => prev.map(customer =>
+      customer.id === customerId ? { ...customer, crm_stage: stage } : customer
+    ));
+
+    try {
+      const { error } = await (supabase as any)
+        .from("growth_customers")
+        .update({ crm_stage: stage, updated_at: new Date().toISOString() })
+        .eq("id", customerId);
+
+      if (error) throw error;
+    } catch (error: any) {
+      setCustomers(previousCustomers);
+      toast.error(error.message || "Erro ao mover cliente no CRM");
+    }
+  };
+
+  const handleCrmDrop = (event: DragEvent<HTMLDivElement>, stage: string) => {
+    event.preventDefault();
+    const customerId = event.dataTransfer.getData("customer-id");
+    if (!customerId) return;
+    void handleCrmStageChange(customerId, stage);
+  };
 
   const handleRecalculateRFM = async () => {
     try {
@@ -745,6 +815,10 @@ export const GrowthCustomers = () => {
               <Users className="h-4 w-4 mr-2" />
               Lista de Clientes
             </TabsTrigger>
+            <TabsTrigger value="crm" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              CRM
+            </TabsTrigger>
             <TabsTrigger value="actions" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium text-amber-600">
               <Sparkles className="h-4 w-4 mr-2" />
               🔥 Ações Inteligentes
@@ -760,6 +834,99 @@ export const GrowthCustomers = () => {
               setActiveTab("list");
             }}
           />
+        </TabsContent>
+
+        <TabsContent value="crm" className="mt-0 border-none p-0 focus-visible:ring-0 space-y-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100">
+            <div className="relative flex-1 w-full max-w-lg">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary h-4 w-4 stroke-[1.5px]" />
+              <Input
+                placeholder="Buscar lead ou cliente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 h-10 bg-white border-border focus:ring-primary/20 transition-all rounded-lg"
+              />
+            </div>
+            <Button
+              onClick={() => {
+                setEditingCustomer(null);
+                setFormData({ name: "", email: "", phone: "", cpf: "", city: "" });
+                setActiveTab("list");
+                setIsDialogOpen(true);
+              }}
+              className="gap-2 h-10 shadow-none"
+            >
+              <Plus className="h-4 w-4" />
+              Novo Lead
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+            <div className="bg-white border border-border rounded-xl p-4">
+              <div className="text-2xl font-medium font-mono">{crmMetrics.total}</div>
+              <div className="text-xs text-text-secondary mt-1">Total no CRM</div>
+            </div>
+            {CRM_STAGES.map((stage) => (
+              <div key={stage.key} className="bg-white border border-border rounded-xl p-4">
+                <div className="text-2xl font-medium font-mono">{crmMetrics.counts[stage.key] || 0}</div>
+                <div className="text-xs text-text-secondary mt-1">{stage.label}</div>
+              </div>
+            ))}
+            <div className="bg-white border border-border rounded-xl p-4">
+              <div className="text-2xl font-medium font-mono">{crmMetrics.conversionRate}%</div>
+              <div className="text-xs text-text-secondary mt-1">Conversão</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+            {CRM_STAGES.map((stage) => (
+              <div
+                key={stage.key}
+                className="bg-white border border-border rounded-xl p-3 min-h-[360px]"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => handleCrmDrop(event, stage.key)}
+              >
+                <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("text-xs font-medium px-2 py-1 rounded-full border", stage.accent)}>
+                      {stage.label}
+                    </span>
+                  </div>
+                  <span className="text-xs text-text-secondary bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">
+                    {crmCustomersByStage[stage.key]?.length || 0}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {(crmCustomersByStage[stage.key] || []).map((customer) => (
+                    <div
+                      key={customer.id}
+                      draggable
+                      onDragStart={(event) => event.dataTransfer.setData("customer-id", customer.id)}
+                      onClick={() => setSelectedCustomerForPurchases(customer)}
+                      className="border border-border rounded-lg p-3 bg-background hover:border-primary/30 hover:bg-primary/[0.02] cursor-pointer transition-colors"
+                    >
+                      <div className="font-medium text-sm text-foreground leading-tight">{customer.name}</div>
+                      <div className="text-xs text-text-secondary mt-1 truncate">
+                        {customer.phone || customer.email || customer.venda_origem || "Sem contato"}
+                      </div>
+                      <div className="flex items-center justify-between mt-3 text-xs">
+                        <span className="font-mono text-emerald-700">{formatCurrency(Number(customer.ltv || 0))}</span>
+                        <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5", getSegmentColor(customer.rfm_segment))}>
+                          {getSegmentLabel(customer.rfm_segment)}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                  {(!crmCustomersByStage[stage.key] || crmCustomersByStage[stage.key].length === 0) && (
+                    <div className="border border-dashed border-border rounded-lg p-4 text-center text-xs text-text-secondary">
+                      Arraste clientes para esta etapa
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </TabsContent>
 
         <TabsContent value="list" className="mt-0 border-none p-0 focus-visible:ring-0 space-y-6">
