@@ -231,7 +231,7 @@ export const createDefaultCanaisVenda = (): CanalVenda[] => [
   { id: '2', nome: 'Instagram Ads', perc: 0, ticket: 0, meta_semanal: 0, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: true, roas_esperado: 0 },
   { id: '3', nome: 'Instagram Orgânico', perc: 0, ticket: 0, meta_semanal: 0, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
   { id: '4', nome: 'WhatsApp', perc: 0, ticket: 0, meta_semanal: 0, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: true, roas_esperado: 0 },
-  { id: '5', nome: 'Shopee', perc: 0, ticket: 0, meta_semanal: 0, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: true, roas_esperado: 0 },
+  { id: '5', nome: 'E-commerce', perc: 0, ticket: 0, meta_semanal: 0, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: true, roas_esperado: 0 },
   { id: '6', nome: 'Indicações/Recorrência', perc: 0, ticket: 0, meta_semanal: 0, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
   { id: '7', nome: 'Eventos/Ações', perc: 0, ticket: 0, meta_semanal: 0, realizado_semana_1: 0, realizado_semana_2: 0, realizado_semana_3: 0, realizado_semana_4: 0, invest: 0, cpv: 0, conv: 0, hasInvest: false, roas_esperado: 0 },
 ];

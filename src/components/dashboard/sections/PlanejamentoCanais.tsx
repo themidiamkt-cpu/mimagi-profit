@@ -385,7 +385,7 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
                     type="text"
                     value={newCanalName}
                     onChange={(e) => setNewCanalName(e.target.value)}
-                    placeholder="Ex: Mercado Livre, E-commerce..."
+                    placeholder="Ex: E-commerce, Loja física..."
                     className="w-full px-3 py-2 bg-background border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
