@@ -32,6 +32,30 @@ const formatMonthLabel = (mes: string) => {
   });
 };
 
+const normalizeChannelName = (name: string) =>
+  name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+const createCanalFromName = (nome: string): CanalVenda => ({
+  id: `auto-${normalizeChannelName(nome).replace(/[^a-z0-9]+/g, '-') || Date.now()}`,
+  nome,
+  perc: 0,
+  ticket: 0,
+  meta_semanal: 0,
+  realizado_semana_1: 0,
+  realizado_semana_2: 0,
+  realizado_semana_3: 0,
+  realizado_semana_4: 0,
+  invest: 0,
+  cpv: 0,
+  conv: 0,
+  hasInvest: false,
+  roas_esperado: 0,
+});
+
 export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMesAtivo }: PlanejamentoCanaisProps) {
   const { weeklyMetrics, refreshWeeklyMetrics, loadingWeekly } = useDashboardContext();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -40,53 +64,81 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
   const [showAddForm, setShowAddForm] = useState(false);
 
   const faturamentoMensal = calculated.faturamento_mensal;
-  const faturamentoSemanal = faturamentoMensal / 4;
   const canais = data.canais_venda;
   const mesesSalvos = Object.keys(data.canais_venda_por_mes).sort().reverse();
 
-  // Soma dos percentuais
-  const somaPerc = canais.reduce((acc, c) => acc + c.perc, 0);
-  const distribuicaoValida = Math.abs(somaPerc - 100) <= 0.01;
+  const configuredByName = canais.reduce<Record<string, CanalVenda>>((acc, canal) => {
+    acc[normalizeChannelName(canal.nome)] = canal;
+    return acc;
+  }, {});
 
-  // Investimento total
-  const investimentoTotal = canais.reduce((acc, c) => acc + (c.invest || 0), 0);
-  const calculateMetaSemanal = (perc: number) => faturamentoSemanal * (perc / 100);
+  const actualByName = WEEK_FIELDS.reduce<Record<string, {
+    nome: string;
+    realizado_semana_1: number;
+    realizado_semana_2: number;
+    realizado_semana_3: number;
+    realizado_semana_4: number;
+    qtdPedidos: number;
+  }>>((acc, week, index) => {
+    const weekData = weeklyMetrics?.[`week${index + 1}`];
+    const channels = weekData?.channels || [];
 
-  // Helper para buscar realizado automático do Bling
-  const getRealizadoAutomatico = (canalNome: string, weekKey: string) => {
-    const weekIndex = weekKey.replace('realizado_semana_', 'week');
-    if (!weeklyMetrics || !weeklyMetrics[weekIndex]) return null;
+    channels.forEach((channel: any) => {
+      const nome = channel.nome || 'Venda Direta / Outros';
+      const key = normalizeChannelName(nome);
 
-    const weekData = weeklyMetrics[weekIndex];
-    const normalizedTarget = canalNome.toLowerCase().trim();
+      if (!acc[key]) {
+        acc[key] = {
+          nome,
+          realizado_semana_1: 0,
+          realizado_semana_2: 0,
+          realizado_semana_3: 0,
+          realizado_semana_4: 0,
+          qtdPedidos: 0,
+        };
+      }
 
-    const matchingChannel = weekData.channels?.find((c: any) =>
-      c.nome.toLowerCase().trim() === normalizedTarget ||
-      normalizedTarget.includes(c.nome.toLowerCase().trim()) ||
-      c.nome.toLowerCase().trim().includes(normalizedTarget)
-    );
+      acc[key][week.key] += Number(channel.faturamento || 0);
+      acc[key].qtdPedidos += Number(channel.qtdPedidos || 0);
+    });
 
-    return matchingChannel ? matchingChannel.faturamento : 0;
-  };
+    return acc;
+  }, {});
+
+  const channelKeys = Array.from(new Set([
+    ...Object.keys(actualByName),
+    ...canais
+      .filter(canal => canal.meta_semanal > 0 || canal.perc > 0)
+      .map(canal => normalizeChannelName(canal.nome)),
+  ]));
+
+  const realizedTotalFromChannels = Object.values(actualByName).reduce((acc, channel) =>
+    acc +
+    channel.realizado_semana_1 +
+    channel.realizado_semana_2 +
+    channel.realizado_semana_3 +
+    channel.realizado_semana_4
+  , 0);
 
   // Cálculos por canal
-  const canaisCalculados = canais.map(canal => {
-    const faturamentoEsperado = faturamentoMensal * (canal.perc / 100);
-    const metaSemanalPlanejada = calculateMetaSemanal(canal.perc);
-    const metaMensalPlanejada = metaSemanalPlanejada * 4;
-
-    // Prioriza o automático se existir, senão usa o manual
-    const r1 = getRealizadoAutomatico(canal.nome, 'realizado_semana_1') ?? canal.realizado_semana_1;
-    const r2 = getRealizadoAutomatico(canal.nome, 'realizado_semana_2') ?? canal.realizado_semana_2;
-    const r3 = getRealizadoAutomatico(canal.nome, 'realizado_semana_3') ?? canal.realizado_semana_3;
-    const r4 = getRealizadoAutomatico(canal.nome, 'realizado_semana_4') ?? canal.realizado_semana_4;
-
+  const canaisCalculados = channelKeys.map(key => {
+    const actual = actualByName[key];
+    const canal = configuredByName[key] || createCanalFromName(actual?.nome || key);
+    const r1 = actual?.realizado_semana_1 || 0;
+    const r2 = actual?.realizado_semana_2 || 0;
+    const r3 = actual?.realizado_semana_3 || 0;
+    const r4 = actual?.realizado_semana_4 || 0;
     const realizadoMensal = r1 + r2 + r3 + r4;
+    const metaSemanalPlanejada = Number(canal.meta_semanal || 0);
+    const metaMensalPlanejada = metaSemanalPlanejada * 4;
+    const perc = realizedTotalFromChannels > 0 ? (realizadoMensal / realizedTotalFromChannels) * 100 : 0;
+    const faturamentoEsperado = metaMensalPlanejada;
+    const ticketReal = actual?.qtdPedidos ? realizadoMensal / actual.qtdPedidos : 0;
     const pecasPlanejadasSemana =
-      canal.ticket > 0 ? Math.ceil(metaSemanalPlanejada / canal.ticket) : 0;
-    const pecasNecessarias = canal.ticket > 0 ? Math.ceil(faturamentoEsperado / canal.ticket) : 0;
+      ticketReal > 0 ? Math.ceil(metaSemanalPlanejada / ticketReal) : 0;
+    const pecasNecessarias = ticketReal > 0 ? Math.ceil(faturamentoEsperado / ticketReal) : 0;
     const roas = canal.roas_esperado || null;
-    const vendasParaPagarInvest = canal.invest && canal.ticket > 0 ? Math.ceil(canal.invest / canal.ticket) : null;
+    const vendasParaPagarInvest = canal.invest && ticketReal > 0 ? Math.ceil(canal.invest / ticketReal) : null;
     const atingimentoMeta = metaMensalPlanejada > 0 ? realizadoMensal / metaMensalPlanejada : null;
     const gapMetaMensal = metaMensalPlanejada - realizadoMensal;
 
@@ -102,10 +154,13 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
       realizado_semana_2: r2,
       realizado_semana_3: r3,
       realizado_semana_4: r4,
+      perc,
       faturamentoEsperado,
       metaSemanalPlanejada,
       metaMensalPlanejada,
       realizadoMensal,
+      qtdPedidos: actual?.qtdPedidos || 0,
+      ticketReal,
       pecasPlanejadasSemana,
       pecasNecessarias,
       roas,
@@ -113,8 +168,9 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
       atingimentoMeta,
       gapMetaMensal,
       status,
+      isConfigured: Boolean(configuredByName[key]),
     };
-  });
+  }).sort((a, b) => b.realizadoMensal - a.realizadoMensal || b.metaSemanalPlanejada - a.metaSemanalPlanejada);
 
   const metaSemanalTotal = canaisCalculados.reduce((acc, c) => acc + c.metaSemanalPlanejada, 0);
   const metaMensalCanais = canaisCalculados.reduce((acc, c) => acc + c.metaMensalPlanejada, 0);
@@ -126,9 +182,9 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
   // Dados para gráfico de pizza
   const pieData = canaisCalculados.map(c => ({
     name: c.nome,
-    value: c.faturamentoEsperado,
+    value: c.realizadoMensal,
     perc: c.perc,
-  }));
+  })).filter(c => c.value > 0);
 
   // Dados para gráfico de barras
   const barData = canaisCalculados.map(c => ({
@@ -139,10 +195,6 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
 
   // Alertas
   const alertasCanais: Alert[] = [];
-
-  if (!distribuicaoValida) {
-    alertasCanais.push({ type: 'danger', message: `A soma da participação dos canais é ${somaPerc.toFixed(1)}%. Deve ser 100%.` });
-  }
 
   canaisCalculados.forEach(c => {
     if (c.hasInvest && c.roas !== null && c.roas < 1) {
@@ -175,13 +227,28 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
         ? {
           ...c,
           [field]: value,
-          ...(field === 'perc'
-            ? { meta_semanal: calculateMetaSemanal(Number(value)) }
-            : {}),
         }
         : c
     );
     updateField('canais_venda', updatedCanais);
+  };
+
+  const updateCanalMetaSemanal = (canal: CanalVenda, value: number) => {
+    const normalizedName = normalizeChannelName(canal.nome);
+    const existing = canais.find(c => normalizeChannelName(c.nome) === normalizedName);
+
+    if (existing) {
+      updateCanal(existing.id, 'meta_semanal', value);
+      return;
+    }
+
+    updateField('canais_venda', [
+      ...canais,
+      {
+        ...createCanalFromName(canal.nome),
+        meta_semanal: value,
+      },
+    ]);
   };
 
   const addCanal = () => {
@@ -291,18 +358,18 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
           </div>
         )}
 
-        {/* Inputs de Distribuição por Canal */}
+        {/* Metas por Canal */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4 border-b border-border pb-2">
             <h3 className="text-lg font-medium text-foreground">
-              Configuração dos Canais
+              Metas Semanais por Canal
             </h3>
             <button
               onClick={() => setShowAddForm(true)}
               className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Adicionar Canal
+              Adicionar Meta
             </button>
           </div>
 
@@ -341,25 +408,24 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
             </div>
           )}
 
-          {/* Lista de Canais Editáveis */}
+          {/* Lista de canais do Bling com meta semanal editável */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
                   <th className="text-left p-3 font-medium w-48">Canal</th>
-                  <th className="text-center p-3 font-medium">% Planejado</th>
-                  <th className="text-center p-3 font-medium">Ticket Médio Planejado</th>
+                  <th className="text-right p-3 font-medium">Realizado Mês</th>
+                  <th className="text-right p-3 font-medium">% Realizado</th>
+                  <th className="text-right p-3 font-medium">Pedidos</th>
+                  <th className="text-right p-3 font-medium">Ticket Real</th>
                   <th className="text-center p-3 font-medium">Meta Semanal</th>
-                  <th className="text-center p-3 font-medium">Investimento</th>
-                  <th className="text-center p-3 font-medium">CPV</th>
-                  <th className="text-center p-3 font-medium">Conv. %</th>
-                  <th className="text-center p-3 font-medium">ROAS Esperado</th>
-                  <th className="text-center p-3 font-medium">Tem Invest.?</th>
+                  <th className="text-right p-3 font-medium">Meta Mensal</th>
+                  <th className="text-right p-3 font-medium">Atingimento</th>
                   <th className="text-center p-3 font-medium w-24">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {canais.map((canal) => (
+                {canaisCalculados.map((canal) => (
                   <tr key={canal.id} className="border-b border-border/50 hover:bg-muted/30">
                     <td className="p-3">
                       {editingId === canal.id ? (
@@ -382,96 +448,36 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
                         <span className="font-medium">{canal.nome}</span>
                       )}
                     </td>
+                    <td className="text-right p-3 font-mono">{formatCurrency(canal.realizadoMensal)}</td>
+                    <td className="text-right p-3 font-mono">{formatPercent(canal.perc)}</td>
+                    <td className="text-right p-3 font-mono">{canal.qtdPedidos}</td>
+                    <td className="text-right p-3 font-mono">{canal.ticketReal ? formatCurrency(canal.ticketReal) : '-'}</td>
                     <td className="p-2">
                       <input
                         type="number"
-                        value={canal.perc}
-                        onChange={(e) => updateCanal(canal.id, 'perc', Number(e.target.value))}
-                        className="w-20 px-2 py-1 bg-background border border-border text-foreground text-center font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                        min={0}
-                        max={100}
-                      />
-                    </td>
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        value={canal.ticket}
-                        onChange={(e) => updateCanal(canal.id, 'ticket', Number(e.target.value))}
-                        className="w-24 px-2 py-1 bg-background border border-border text-foreground text-center font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        value={canal.metaSemanalPlanejada}
+                        onChange={(e) => updateCanalMetaSemanal(canal, Number(e.target.value))}
+                        className="w-28 px-2 py-1 bg-background border border-border text-foreground text-center font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                         min={0}
                       />
                     </td>
-                    <td className="p-2">
-                      <div className="w-28 px-2 py-1 bg-muted/40 border border-border text-foreground text-center font-mono text-sm">
-                        {formatCurrency(canaisCalculados.find((item) => item.id === canal.id)?.metaSemanalPlanejada || 0)}
-                      </div>
-                    </td>
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        value={canal.invest}
-                        onChange={(e) => updateCanal(canal.id, 'invest', Number(e.target.value))}
-                        className="w-24 px-2 py-1 bg-background border border-border text-foreground text-center font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                        min={0}
-                        disabled={!canal.hasInvest}
-                      />
-                    </td>
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        value={canal.cpv}
-                        onChange={(e) => updateCanal(canal.id, 'cpv', Number(e.target.value))}
-                        className="w-20 px-2 py-1 bg-background border border-border text-foreground text-center font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                        min={0}
-                        disabled={!canal.hasInvest}
-                      />
-                    </td>
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        value={canal.conv}
-                        onChange={(e) => updateCanal(canal.id, 'conv', Number(e.target.value))}
-                        className="w-20 px-2 py-1 bg-background border border-border text-foreground text-center font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                        min={0}
-                        step={0.1}
-                        disabled={!canal.hasInvest}
-                      />
-                    </td>
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        value={canal.roas_esperado}
-                        onChange={(e) => updateCanal(canal.id, 'roas_esperado', Number(e.target.value))}
-                        className="w-20 px-2 py-1 bg-background border border-border text-foreground text-center font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                        min={0}
-                        step={0.1}
-                        disabled={!canal.hasInvest}
-                      />
-                    </td>
-                    <td className="p-2 text-center">
-                      <input
-                        type="checkbox"
-                        checked={canal.hasInvest}
-                        onChange={(e) => updateCanal(canal.id, 'hasInvest', e.target.checked)}
-                        className="w-4 h-4 accent-primary"
-                      />
+                    <td className="text-right p-3 font-mono">{formatCurrency(canal.metaMensalPlanejada)}</td>
+                    <td className={`text-right p-3 font-mono ${getAtingimentoColor(canal.atingimentoMeta)}`}>
+                      {canal.atingimentoMeta !== null ? formatPercent(canal.atingimentoMeta * 100) : '-'}
                     </td>
                     <td className="p-2 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => startEditing(canal)}
-                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-muted"
-                          title="Editar nome"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => removeCanal(canal.id)}
-                          className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          title="Remover canal"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canal.isConfigured ? (
+                          <button
+                            onClick={() => removeCanal(canal.id)}
+                            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            title="Limpar meta manual"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Auto</span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -480,26 +486,20 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
               <tfoot>
                 <tr className="bg-muted/50 font-medium">
                   <td className="p-3">TOTAL</td>
-                  <td className={`text-center p-3 font-mono ${distribuicaoValida ? 'text-green-600' : 'text-red-600'}`}>
-                    {somaPerc.toFixed(1)}%
-                  </td>
-                  <td className="text-center p-3 font-mono">-</td>
+                  <td className="text-right p-3 font-mono">{formatCurrency(realizadoMensalCanais)}</td>
+                  <td className="text-right p-3 font-mono">{realizadoMensalCanais > 0 ? '100,0%' : '-'}</td>
+                  <td className="text-right p-3 font-mono">{canaisCalculados.reduce((acc, canal) => acc + canal.qtdPedidos, 0)}</td>
+                  <td className="text-right p-3 font-mono">-</td>
                   <td className="text-center p-3 font-mono">{formatCurrency(metaSemanalTotal)}</td>
-                  <td className="text-center p-3 font-mono">{formatCurrency(investimentoTotal)}</td>
-                  <td className="text-center p-3 font-mono">-</td>
-                  <td className="text-center p-3 font-mono">-</td>
-                  <td className="text-center p-3 font-mono">-</td>
-                  <td className="text-center p-3">-</td>
+                  <td className="text-right p-3 font-mono">{formatCurrency(metaMensalCanais)}</td>
+                  <td className={`text-right p-3 font-mono ${getAtingimentoColor(atingimentoMensalCanais)}`}>
+                    {atingimentoMensalCanais !== null ? formatPercent(atingimentoMensalCanais * 100) : '-'}
+                  </td>
                   <td className="text-center p-3">-</td>
                 </tr>
               </tfoot>
             </table>
           </div>
-          {!distribuicaoValida && (
-            <div className="mt-2 text-sm font-medium text-red-600">
-              Total: {somaPerc.toFixed(1)}% (deve ser 100%)
-            </div>
-          )}
         </div>
 
         <div className="mb-8">
@@ -538,13 +538,9 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
                     <td className="p-3 font-medium">{canal.nome}</td>
                     {WEEK_FIELDS.map((week) => (
                       <td key={week.key} className="p-2">
-                        <input
-                          type="number"
-                          value={canal[week.key]}
-                          onChange={(e) => updateCanal(canal.id, week.key, Number(e.target.value))}
-                          className="w-24 px-2 py-1 bg-background border border-border text-foreground text-center font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                          min={0}
-                        />
+                        <div className="w-28 px-2 py-1 bg-muted/40 border border-border text-center font-mono text-sm">
+                          {formatCurrency(canal[week.key])}
+                        </div>
                       </td>
                     ))}
                     <td className="text-right p-3 font-mono">{formatCurrency(canal.metaMensalPlanejada)}</td>
@@ -581,19 +577,19 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
         {/* Tabela 1 - Distribuição de Faturamento */}
         <div className="mb-8">
           <h3 className="text-lg font-medium text-foreground mb-4 border-b border-border pb-2">
-            Tabela: Planejado por Canal
+            Tabela: Metas e Realizado por Canal
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border">
                   <th className="text-left p-3 font-medium">Canal</th>
-                  <th className="text-right p-3 font-medium">% Planejado</th>
-                  <th className="text-right p-3 font-medium">Fat. Mensal pelo %</th>
+                  <th className="text-right p-3 font-medium">% Realizado</th>
+                  <th className="text-right p-3 font-medium">Realizado</th>
                   <th className="text-right p-3 font-medium">Meta Semanal</th>
-                  <th className="text-right p-3 font-medium">Meta Mensal Cadastrada</th>
-                  <th className="text-right p-3 font-medium">Ticket Planejado</th>
-                  <th className="text-right p-3 font-medium">Peças/Semana</th>
+                  <th className="text-right p-3 font-medium">Meta Mensal</th>
+                  <th className="text-right p-3 font-medium">Ticket Real</th>
+                  <th className="text-right p-3 font-medium">Pedidos</th>
                 </tr>
               </thead>
               <tbody>
@@ -601,21 +597,21 @@ export function PlanejamentoCanais({ data, calculated, updateField, setCanaisMes
                   <tr key={canal.id} className="border-b border-border/50 hover:bg-muted/30">
                     <td className="p-3 font-medium">{canal.nome}</td>
                     <td className="text-right p-3 font-mono">{formatPercent(canal.perc)}</td>
-                    <td className="text-right p-3 font-mono">{formatCurrency(canal.faturamentoEsperado)}</td>
+                    <td className="text-right p-3 font-mono">{formatCurrency(canal.realizadoMensal)}</td>
                     <td className="text-right p-3 font-mono">{formatCurrency(canal.metaSemanalPlanejada)}</td>
                     <td className="text-right p-3 font-mono">{formatCurrency(canal.metaMensalPlanejada)}</td>
-                    <td className="text-right p-3 font-mono">{formatCurrency(canal.ticket)}</td>
-                    <td className="text-right p-3 font-mono">{canal.pecasPlanejadasSemana}</td>
+                    <td className="text-right p-3 font-mono">{canal.ticketReal ? formatCurrency(canal.ticketReal) : '-'}</td>
+                    <td className="text-right p-3 font-mono">{canal.qtdPedidos}</td>
                   </tr>
                 ))}
                 <tr className="bg-muted/50 font-medium">
                   <td className="p-3">TOTAL</td>
-                  <td className="text-right p-3 font-mono">{formatPercent(somaPerc)}</td>
-                  <td className="text-right p-3 font-mono">{formatCurrency(faturamentoMensal)}</td>
+                  <td className="text-right p-3 font-mono">{realizadoMensalCanais > 0 ? '100,0%' : '-'}</td>
+                  <td className="text-right p-3 font-mono">{formatCurrency(realizadoMensalCanais)}</td>
                   <td className="text-right p-3 font-mono">{formatCurrency(metaSemanalTotal)}</td>
                   <td className="text-right p-3 font-mono">{formatCurrency(metaMensalCanais)}</td>
                   <td className="text-right p-3 font-mono">-</td>
-                  <td className="text-right p-3 font-mono">{canaisCalculados.reduce((acc, c) => acc + c.pecasPlanejadasSemana, 0)}</td>
+                  <td className="text-right p-3 font-mono">{canaisCalculados.reduce((acc, c) => acc + c.qtdPedidos, 0)}</td>
                 </tr>
               </tbody>
             </table>
