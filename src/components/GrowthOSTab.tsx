@@ -1,5 +1,5 @@
 import { GrowthCustomers } from "@/components/growth/GrowthCustomers";
 
 export const GrowthOSTab = () => {
-  return <GrowthCustomers />;
+  return <GrowthCustomers initialTab="list" standaloneTab />;
 };

@@ -112,7 +112,12 @@ const normalizeCustomerName = (value?: string | null) =>
     .replace(/[\u0300-\u036f]/g, "") || "";
 const getOrderItems = (order: any) => Array.isArray(order?.itens) ? order.itens : (Array.isArray(order?.itens?.data) ? order.itens.data : []);
 
-export const GrowthCustomers = () => {
+interface GrowthCustomersProps {
+  initialTab?: "list" | "crm" | "actions";
+  standaloneTab?: boolean;
+}
+
+export const GrowthCustomers = ({ initialTab = "list", standaloneTab = false }: GrowthCustomersProps) => {
   const { user } = useAuthContext();
   const [customers, setCustomers] = useState<GrowthCustomer[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -145,7 +150,11 @@ export const GrowthCustomers = () => {
     current_size: "",
   });
 
-  const [activeTab, setActiveTab] = useState("list");
+  const [activeTab, setActiveTab] = useState<"list" | "crm" | "actions">(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   useEffect(() => {
     // Busca todos os filhos ao carregar a tela
@@ -808,23 +817,25 @@ export const GrowthCustomers = () => {
 
   return (
     <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center justify-between mb-6">
-          <TabsList className="bg-white border border-gray-100 p-1 rounded-xl h-11">
-            <TabsTrigger value="list" className="rounded-lg px-6 data-[state=active]:bg-gray-50 data-[state=active]:shadow-none font-medium">
-              <Users className="h-4 w-4 mr-2" />
-              Lista de Clientes
-            </TabsTrigger>
-            <TabsTrigger value="crm" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              CRM
-            </TabsTrigger>
-            <TabsTrigger value="actions" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium text-amber-600">
-              <Sparkles className="h-4 w-4 mr-2" />
-              🔥 Ações Inteligentes
-            </TabsTrigger>
-          </TabsList>
-        </div>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "list" | "crm" | "actions")} className="w-full">
+        {!standaloneTab && (
+          <div className="flex items-center justify-between mb-6">
+            <TabsList className="bg-white border border-gray-100 p-1 rounded-xl h-11">
+              <TabsTrigger value="list" className="rounded-lg px-6 data-[state=active]:bg-gray-50 data-[state=active]:shadow-none font-medium">
+                <Users className="h-4 w-4 mr-2" />
+                Lista de Clientes
+              </TabsTrigger>
+              <TabsTrigger value="crm" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                CRM
+              </TabsTrigger>
+              <TabsTrigger value="actions" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium text-amber-600">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Ações Inteligentes
+              </TabsTrigger>
+            </TabsList>
+          </div>
+        )}
 
         <TabsContent value="actions" className="mt-0 border-none p-0 focus-visible:ring-0">
           <GrowthSmartActions
@@ -851,7 +862,7 @@ export const GrowthCustomers = () => {
               onClick={() => {
                 setEditingCustomer(null);
                 setFormData({ name: "", email: "", phone: "", cpf: "", city: "" });
-                setActiveTab("list");
+                if (!standaloneTab) setActiveTab("list");
                 setIsDialogOpen(true);
               }}
               className="gap-2 h-10 shadow-none"
