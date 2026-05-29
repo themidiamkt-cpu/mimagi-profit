@@ -189,8 +189,7 @@ export const GrowthCustomers = () => {
       });
 
       localOrders.forEach((order: any) => {
-        const situacaoId = order.situacao?.id ?? order.situacao_id;
-        if (situacaoId === 12) return;
+        if (!blingApi.isAtendidoOrManual(order)) return;
 
         const contatoId = order.contato?.id ?? order.contato_id;
         const contatoNome = order.contato?.nome ?? order.contato_nome;

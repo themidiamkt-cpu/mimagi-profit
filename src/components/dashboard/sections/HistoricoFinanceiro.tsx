@@ -64,9 +64,7 @@ export function HistoricoFinanceiro() {
         }> = {};
 
         pedidos.forEach(p => {
-            // Mostrar apenas pedidos ATENDIDOS (ID 6 no Bling v3) conforme pedido do usuário
-            const situacaoId = Number(p.situacao?.id ?? p.situacao_id);
-            if (situacaoId !== 6 && situacaoId !== 9) return;
+            if (!blingApi.isAtendidoOrManual(p)) return;
 
             const [y, m, d] = p.data.split('-').map(Number);
             const date = new Date(y, m - 1, d);

@@ -4,6 +4,7 @@ import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/
 const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const AVG_DAYS_PER_MONTH = 30.4375;
+const BLING_STATUS_ATENDIDO = 6;
 
 export interface BlingToken {
     access_token: string;
@@ -12,6 +13,12 @@ export interface BlingToken {
 }
 
 export const blingApi = {
+    isAtendidoOrManual: (pedido: any): boolean => {
+        const situacaoId = pedido?.situacao?.id ?? pedido?.situacao_id;
+
+        return situacaoId === null || situacaoId === undefined || Number(situacaoId) === BLING_STATUS_ATENDIDO;
+    },
+
     /**
      * Redireciona para a página de autorização do Bling
      */
@@ -171,9 +178,8 @@ export const blingApi = {
         // expand[]=itens e expand[]=contato são CRÍTICOS para análise no dashboard
         let endpoint = `/pedidos/vendas?pagina=${pagina}&limite=${limite}&expand[]=itens&expand[]=contato`;
 
-        // Se nenhum status for passado e não houver data, assume que é para o card de "Últimos Pedidos" 
-        // e mostra Atendidos (6) e Em Aberto (9) conforme pedido do usuário.
-        const situacao = status || (dataInicial ? undefined : '6,9');
+        // Sem data, busca apenas Atendidos. Em Aberto não entra nas métricas porque pode virar recusado/cancelado.
+        const situacao = status || (dataInicial ? undefined : String(BLING_STATUS_ATENDIDO));
 
         if (situacao) endpoint += `&situacao=${situacao}`;
         if (dataInicial) endpoint += `&dataInicial=${dataInicial}`;
@@ -204,9 +210,8 @@ export const blingApi = {
             if (dataInicial) query = query.gte('data', dataInicial);
             if (dataFinal) query = query.lte('data', dataFinal);
 
-            // Filtro por status "Atendido" (6) e "Em Aberto" (9) conforme pedido do usuário
             // Também permite nulo para vendas manuais da planilha
-            query = query.or(`situacao_id.in.(6,9),situacao_id.is.null`);
+            query = query.or(`situacao_id.eq.${BLING_STATUS_ATENDIDO},situacao_id.is.null`);
 
             query = query.range(page * 1000, (page + 1) * 1000 - 1);
 
@@ -637,10 +642,9 @@ export const blingApi = {
         const normalizedFilter = brandFilter ? blingApi.normalizeBrand(brandFilter) : null;
 
         pedidos.forEach(p => {
-            // Mostrar pedidos ATENDIDOS (6) e EM ABERTO (9)
+            // Mostrar pedidos Atendidos (6). Pedidos em aberto ficam fora até virarem atendidos.
             // Pedidos manuais (sem situacao_id) também são incluídos
-            const sId = p.situacao?.id ?? p.situacao_id;
-            if (sId !== null && sId !== undefined && sId !== 6 && sId !== 9) return;
+            if (!blingApi.isAtendidoOrManual(p)) return;
 
             let orderValueForBrand = 0;
             let hasItemsOfBrand = false;
@@ -1392,10 +1396,9 @@ export const blingApi = {
         const brandMetrics: Record<string, { label: string; faturamento: number; qtdItens: number }> = {};
 
         pedidos.forEach((p: any) => {
-            // Filtrar pedidos ATENDIDOS (6) e EM ABERTO (9)
+            // Filtrar pedidos Atendidos (6). Pedidos em aberto ficam fora até virarem atendidos.
             // Pedidos manuais (sem situacao_id) também são incluídos
-            const sId = p.situacao?.id ?? p.situacao_id;
-            if (sId !== null && sId !== undefined && sId !== 6 && sId !== 9) return;
+            if (!blingApi.isAtendidoOrManual(p)) return;
 
             // Suporta formato novo (array normalizado) ou antigo (p.itens.data)
             const itens = Array.isArray(p.itens) ? p.itens : (Array.isArray(p.itens?.data) ? p.itens.data : []);
@@ -1497,10 +1500,9 @@ export const blingApi = {
         const productMetrics: Record<string, { nome: string; codigo: string; marca: string; faturamento: number; qtd: number }> = {};
 
         pedidos.forEach((p: any) => {
-            // Filtrar pedidos ATENDIDOS (6) e EM ABERTO (9)
+            // Filtrar pedidos Atendidos (6). Pedidos em aberto ficam fora até virarem atendidos.
             // Pedidos manuais (sem situacao_id) também são incluídos
-            const sId = p.situacao?.id ?? p.situacao_id;
-            if (sId !== null && sId !== undefined && sId !== 6 && sId !== 9) return;
+            if (!blingApi.isAtendidoOrManual(p)) return;
 
             const itens = Array.isArray(p.itens) ? p.itens : (Array.isArray(p.itens?.data) ? p.itens.data : []);
 
