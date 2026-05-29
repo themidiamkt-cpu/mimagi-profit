@@ -192,7 +192,11 @@ export const blingApi = {
      * Lê pedidos do cache local (tabela bling_pedidos no Supabase)
      * Muito mais rápido que buscar no Bling a cada acesso.
      */
-    getLocalPedidos: async (dataInicial?: string, dataFinal?: string): Promise<any[]> => {
+    getLocalPedidos: async (
+        dataInicial?: string,
+        dataFinal?: string,
+        options?: { includeAllStatuses?: boolean }
+    ): Promise<any[]> => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return [];
 
@@ -210,8 +214,10 @@ export const blingApi = {
             if (dataInicial) query = query.gte('data', dataInicial);
             if (dataFinal) query = query.lte('data', dataFinal);
 
-            // Também permite nulo para vendas manuais da planilha
-            query = query.or(`situacao_id.eq.${BLING_STATUS_ATENDIDO},situacao_id.is.null`);
+            if (!options?.includeAllStatuses) {
+                // Também permite nulo para vendas manuais da planilha
+                query = query.or(`situacao_id.eq.${BLING_STATUS_ATENDIDO},situacao_id.is.null`);
+            }
 
             query = query.range(page * 1000, (page + 1) * 1000 - 1);
 
@@ -633,7 +639,13 @@ export const blingApi = {
     /**
      * Calcula métricas de CRM (LTV, Ticket Médio, etc) a partir de uma lista de pedidos
      */
-    calculateMetrics: (pedidos: any[], lojaNames?: Record<string, string>, brandFilter?: string, brandMap?: Record<string, string>) => {
+    calculateMetrics: (
+        pedidos: any[],
+        lojaNames?: Record<string, string>,
+        brandFilter?: string,
+        brandMap?: Record<string, string>,
+        options?: { countAllPedidosByChannel?: boolean }
+    ) => {
         const customerMetrics: Record<string, {
             nome: string;
             contatoId: number | string;
@@ -667,6 +679,25 @@ export const blingApi = {
         const normalizedFilter = brandFilter ? blingApi.normalizeBrand(brandFilter) : null;
 
         pedidos.forEach(p => {
+            // Quando usado nos painéis operacionais, a coluna "Ped." mostra todos os pedidos
+            // sincronizados do canal. O faturamento continua entrando só para vendas atendidas.
+            if (options?.countAllPedidosByChannel && !normalizedFilter) {
+                const lojaId = p.loja?.id ?? p.loja_id ?? 'padrão';
+                const realLojaId = p.loja?.id ?? p.loja_id;
+                const lojaNome = p.loja_descricao ||
+                    p.loja?.descricao ||
+                    (realLojaId ? (lojaNames?.[String(realLojaId)] || `Canal ${realLojaId}`) : 'Venda Direta / Outros');
+
+                if (!channelMetrics[lojaId]) {
+                    channelMetrics[lojaId] = {
+                        nome: lojaNome,
+                        faturamento: 0,
+                        qtdPedidos: 0
+                    };
+                }
+                channelMetrics[lojaId].qtdPedidos += 1;
+            }
+
             // Mostrar pedidos Atendidos (6). Pedidos em aberto ficam fora até virarem atendidos.
             // Pedidos manuais (sem situacao_id) também são incluídos
             if (!blingApi.isAtendidoOrManual(p)) return;
@@ -781,7 +812,9 @@ export const blingApi = {
                 };
             }
             channelMetrics[lojaId].faturamento += orderValueForBrand;
-            channelMetrics[lojaId].qtdPedidos += 1;
+            if (!options?.countAllPedidosByChannel || normalizedFilter) {
+                channelMetrics[lojaId].qtdPedidos += 1;
+            }
 
             // Evolução Temporal
             if (p.data) {

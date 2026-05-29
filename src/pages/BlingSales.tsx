@@ -149,8 +149,9 @@ export function BlingSales() {
         setLoading(true);
         try {
             await fetchBlingConfig();
-            const localPedidos = await blingApi.getLocalPedidos(startDate, endDate);
-            setPedidos(localPedidos);
+            const allPedidos = await blingApi.getLocalPedidos(startDate, endDate, { includeAllStatuses: true });
+            const validPedidos = allPedidos.filter((pedido) => blingApi.isAtendidoOrManual(pedido));
+            setPedidos(allPedidos);
             // ... resto do fetchData igual
             // 2. Buscar faturamento por marca
             const salesByBrand = await blingApi.getSalesByBrand(startDate, endDate);
@@ -166,7 +167,13 @@ export function BlingSales() {
             });
             setBrandMap(bMap);
 
-            setMetrics(blingApi.calculateMetrics(localPedidos, lojaNames, selectedBrand || undefined, bMap));
+            setMetrics(blingApi.calculateMetrics(
+                selectedBrand ? validPedidos : allPedidos,
+                lojaNames,
+                selectedBrand || undefined,
+                bMap,
+                { countAllPedidosByChannel: !selectedBrand }
+            ));
 
             const products = await blingApi.getSalesByProduct(startDate, endDate);
             setProductMetrics(products);

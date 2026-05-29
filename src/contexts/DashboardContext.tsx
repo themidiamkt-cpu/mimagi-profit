@@ -277,8 +277,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setLoadingRealTime(true);
     try {
       // Busca pedidos do cache local para o período selecionado
-      const pedidos = await blingApi.getLocalPedidos(startDate, endDate);
-      const metrics = blingApi.calculateMetrics(pedidos, lojaNames);
+      const pedidos = await blingApi.getLocalPedidos(startDate, endDate, { includeAllStatuses: true });
+      const metrics = blingApi.calculateMetrics(pedidos, lojaNames, undefined, undefined, {
+        countAllPedidosByChannel: true,
+      });
 
       // Busca métricas de marcas e produtos
       const [brands, products] = await Promise.all([
