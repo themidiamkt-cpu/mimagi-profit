@@ -7,6 +7,8 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const ML_PAID_STATUS = 'paid'
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -122,7 +124,9 @@ serve(async (req) => {
         while (true) {
             const ordersUrl =
                 `https://api.mercadolibre.com/orders/search?seller=${sellerId}` +
+                `&order.status=${ML_PAID_STATUS}` +
                 `&order.date_created.from=${fromDate}T00:00:00.000-00:00` +
+                `&order.date_created.to=${today}T23:59:59.999-00:00` +
                 `&sort=date_desc&offset=${ordersOffset}&limit=${ORDER_PAGE_SIZE}`
             const ordersRes = await fetch(ordersUrl, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }

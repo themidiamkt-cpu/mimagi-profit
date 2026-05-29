@@ -6,6 +6,17 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const PAID_ORDER_STATUSES = new Set(['paid'])
+const PENDING_ORDER_STATUSES = new Set(['confirmed', 'payment_required', 'payment_in_process'])
+
+function dateStartSaoPaulo(date: string): string {
+    return `${date}T00:00:00.000-03:00`
+}
+
+function dateEndSaoPaulo(date: string): string {
+    return `${date}T23:59:59.999-03:00`
+}
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -51,11 +62,14 @@ serve(async (req) => {
         // Filtro de período para o Resumo
         const now = new Date()
         const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-        const finalFrom = dateFrom ? new Date(dateFrom).toISOString() : defaultFrom
-        const finalTo = dateTo ? new Date(dateTo).toISOString() : now.toISOString()
+        const finalFrom = dateFrom ? new Date(dateStartSaoPaulo(dateFrom)).toISOString() : defaultFrom
+        const finalTo = dateTo ? new Date(dateEndSaoPaulo(dateTo)).toISOString() : now.toISOString()
 
         const filteredOrders = (orders || []).filter(order =>
-            order.order_date && order.order_date >= finalFrom && order.order_date <= finalTo
+            order.order_date &&
+            order.order_date >= finalFrom &&
+            order.order_date <= finalTo &&
+            PAID_ORDER_STATUSES.has(String(order.status || '').toLowerCase())
         )
 
         const totalOrders = filteredOrders.length
@@ -78,9 +92,9 @@ serve(async (req) => {
             syncMeta = r1.data
         }
 
-        // Pedidos pendentes = aguardando envio (confirmed) ou pagamento pendente
+        // Pedidos pendentes ficam visíveis como indicador, mas não entram no faturamento.
         const pendingOrders = orders?.filter(order =>
-            order.status === 'confirmed' || order.status === 'payment_required'
+            PENDING_ORDER_STATUSES.has(String(order.status || '').toLowerCase())
         ).length || 0
         const activeAds = ads?.length || 0
         const totalVisits = ads?.reduce((acc, ad) => acc + (ad.visits || 0), 0) || 0
@@ -103,7 +117,7 @@ serve(async (req) => {
                 revenueGrowth: 0,
                 ordersGrowth: 0
             },
-            recentOrders: (orders || []).slice(0, 5).map(order => ({
+            recentOrders: filteredOrders.slice(0, 5).map(order => ({
                 id: order.ml_order_id,
                 buyer: order.buyer_nickname || 'N/A',
                 status: order.status,
