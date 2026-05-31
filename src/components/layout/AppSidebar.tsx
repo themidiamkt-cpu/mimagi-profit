@@ -8,6 +8,7 @@ import {
   User,
   Receipt,
   ShoppingBag,
+  MessageCircle,
   RefreshCw,
   Shield,
   Box,
@@ -52,6 +53,7 @@ const intelligenceItems = [
   { title: 'Fichinhas', path: '/fichinhas', icon: Receipt },
   { title: 'Clientes', path: '/growth', icon: BarChart3 },
   { title: 'CRM', path: '/crm', icon: TrendingUp },
+  { title: 'WhatsApp', path: '/whatsapp', icon: MessageCircle },
   { title: 'Vendas', path: '/bling-sales', icon: ShoppingBag },
   { title: 'Produtos', path: '/produtos', icon: Package },
 ];

@@ -28,6 +28,7 @@ import Financeiro from "./pages/Financeiro";
 import Fichinhas from "./pages/Fichinhas";
 import GrowthOS from "./pages/GrowthOS";
 import CRM from "./pages/CRM";
+import WhatsAppConnection from "./pages/WhatsAppConnection";
 import BlingCallback from "./pages/BlingCallback";
 import CustomerDetail from "./pages/CustomerDetail";
 import CustomerRegistration from "./pages/CustomerRegistration";
@@ -65,6 +66,7 @@ const DashboardRoutes = () => (
         <Route path="/bling-sales" element={<BlingSales />} />
         <Route path="/growth" element={<GrowthOS />} />
         <Route path="/crm" element={<CRM />} />
+        <Route path="/whatsapp" element={<WhatsAppConnection />} />
         {/* Default */}
         <Route path="/" element={<Navigate to="/visao" replace />} />
         <Route path="*" element={<NotFound />} />
