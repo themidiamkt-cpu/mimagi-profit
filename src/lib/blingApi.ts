@@ -7,6 +7,7 @@ const AVG_DAYS_PER_MONTH = 30.4375;
 const BLING_STATUS_ATENDIDO = 6;
 const VALID_SALE_STATUS_NAMES = ['atendido', 'pago', 'recebido', 'faturado', 'concluido', 'concluído'];
 const BLOCKED_SALE_STATUS_NAMES = ['em aberto', 'aberto', 'cancelado', 'cancelada', 'recusado', 'recusada', 'pendente'];
+const CANCELED_OR_REFUSED_STATUS_NAMES = ['cancelado', 'cancelada', 'recusado', 'recusada', 'estornado', 'estornada'];
 
 export interface BlingToken {
     access_token: string;
@@ -15,16 +16,18 @@ export interface BlingToken {
 }
 
 export const blingApi = {
+    getStatusName: (pedido: any): string => (
+        pedido?.situacao?.nome ??
+        pedido?.situacao?.descricao ??
+        pedido?.situacao_nome ??
+        pedido?.raw?.situacao?.nome ??
+        pedido?.raw?.situacao?.descricao ??
+        ''
+    ).toString().trim().toLowerCase(),
+
     isAtendidoOrManual: (pedido: any): boolean => {
         const situacaoId = pedido?.situacao?.id ?? pedido?.situacao_id;
-        const rawStatusName = (
-            pedido?.situacao?.nome ??
-            pedido?.situacao?.descricao ??
-            pedido?.situacao_nome ??
-            pedido?.raw?.situacao?.nome ??
-            pedido?.raw?.situacao?.descricao ??
-            ''
-        ).toString().trim().toLowerCase();
+        const rawStatusName = blingApi.getStatusName(pedido);
 
         if (rawStatusName) {
             if (BLOCKED_SALE_STATUS_NAMES.some((status) => rawStatusName.includes(status))) return false;
@@ -32,6 +35,11 @@ export const blingApi = {
         }
 
         return situacaoId === null || situacaoId === undefined || Number(situacaoId) === BLING_STATUS_ATENDIDO;
+    },
+
+    isCanceledOrRefused: (pedido: any): boolean => {
+        const rawStatusName = blingApi.getStatusName(pedido);
+        return CANCELED_OR_REFUSED_STATUS_NAMES.some((status) => rawStatusName.includes(status));
     },
 
     /**
@@ -689,8 +697,8 @@ export const blingApi = {
         const normalizedFilter = brandFilter ? blingApi.normalizeBrand(brandFilter) : null;
 
         pedidos.forEach(p => {
-            // Quando usado nos painéis operacionais, a coluna "Ped." mostra todos os pedidos
-            // sincronizados do canal. O faturamento continua entrando só para vendas atendidas.
+            // Quando usado nos painéis operacionais, "Ped." e "Fat." mostram os pedidos do canal.
+            // Apenas pedidos claramente cancelados/recusados ficam fora do valor do canal.
             if (options?.countAllPedidosByChannel && !normalizedFilter) {
                 const lojaId = p.loja?.id ?? p.loja_id ?? 'padrão';
                 const realLojaId = p.loja?.id ?? p.loja_id;
@@ -706,6 +714,9 @@ export const blingApi = {
                     };
                 }
                 channelMetrics[lojaId].qtdPedidos += 1;
+                if (!blingApi.isCanceledOrRefused(p)) {
+                    channelMetrics[lojaId].faturamento += Number(p.total || 0);
+                }
             }
 
             // Mostrar pedidos Atendidos (6). Pedidos em aberto ficam fora até virarem atendidos.
@@ -821,8 +832,8 @@ export const blingApi = {
                     qtdPedidos: 0
                 };
             }
-            channelMetrics[lojaId].faturamento += orderValueForBrand;
             if (!options?.countAllPedidosByChannel || normalizedFilter) {
+                channelMetrics[lojaId].faturamento += orderValueForBrand;
                 channelMetrics[lojaId].qtdPedidos += 1;
             }
 
