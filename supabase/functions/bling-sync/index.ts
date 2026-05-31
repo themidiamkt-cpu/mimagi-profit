@@ -309,7 +309,7 @@ serve(async (req) => {
                     numero: String(p.numero || p.id),
                     data: p.data ? p.data.split(' ')[0] : dateStart,
                     situacao_id: p.situacao?.id ?? null,
-                    situacao_nome: p.situacao?.nome ?? null,
+                    situacao_nome: p.situacao?.nome ?? p.situacao?.descricao ?? null,
                     total: Number(p.total || 0),
                     contato_id: p.contato?.id ?? null,
                     contato_nome: p.contato?.nome ?? null,

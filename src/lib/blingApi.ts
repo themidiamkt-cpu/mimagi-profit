@@ -5,6 +5,8 @@ const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const AVG_DAYS_PER_MONTH = 30.4375;
 const BLING_STATUS_ATENDIDO = 6;
+const VALID_SALE_STATUS_NAMES = ['atendido', 'pago', 'recebido', 'faturado', 'concluido', 'concluído'];
+const BLOCKED_SALE_STATUS_NAMES = ['em aberto', 'aberto', 'cancelado', 'cancelada', 'recusado', 'recusada', 'pendente'];
 
 export interface BlingToken {
     access_token: string;
@@ -15,6 +17,19 @@ export interface BlingToken {
 export const blingApi = {
     isAtendidoOrManual: (pedido: any): boolean => {
         const situacaoId = pedido?.situacao?.id ?? pedido?.situacao_id;
+        const rawStatusName = (
+            pedido?.situacao?.nome ??
+            pedido?.situacao?.descricao ??
+            pedido?.situacao_nome ??
+            pedido?.raw?.situacao?.nome ??
+            pedido?.raw?.situacao?.descricao ??
+            ''
+        ).toString().trim().toLowerCase();
+
+        if (rawStatusName) {
+            if (BLOCKED_SALE_STATUS_NAMES.some((status) => rawStatusName.includes(status))) return false;
+            if (VALID_SALE_STATUS_NAMES.some((status) => rawStatusName.includes(status))) return true;
+        }
 
         return situacaoId === null || situacaoId === undefined || Number(situacaoId) === BLING_STATUS_ATENDIDO;
     },
@@ -214,11 +229,6 @@ export const blingApi = {
             if (dataInicial) query = query.gte('data', dataInicial);
             if (dataFinal) query = query.lte('data', dataFinal);
 
-            if (!options?.includeAllStatuses) {
-                // Também permite nulo para vendas manuais da planilha
-                query = query.or(`situacao_id.eq.${BLING_STATUS_ATENDIDO},situacao_id.is.null`);
-            }
-
             query = query.range(page * 1000, (page + 1) * 1000 - 1);
 
             const { data, error } = await query;
@@ -231,7 +241,7 @@ export const blingApi = {
                 hasMore = false;
             }
         }
-        return allData;
+        return options?.includeAllStatuses ? allData : allData.filter((pedido) => blingApi.isAtendidoOrManual(pedido));
     },
 
     /**
