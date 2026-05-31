@@ -4,9 +4,8 @@ import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/
 const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const AVG_DAYS_PER_MONTH = 30.4375;
-const BLING_STATUS_ATENDIDO = 6;
-const VALID_SALE_STATUS_NAMES = ['atendido', 'pago', 'recebido', 'faturado', 'concluido', 'concluído'];
-const BLOCKED_SALE_STATUS_NAMES = ['em aberto', 'aberto', 'cancelado', 'cancelada', 'recusado', 'recusada', 'pendente'];
+const VALID_SALE_STATUS_NAMES = ['atendido'];
+const BLOCKED_SALE_STATUS_NAMES = ['não atendido', 'nao atendido', 'em aberto', 'aberto', 'em digitação', 'digitacao', 'digitação', 'em andamento', 'venda agenciada', 'cancelado', 'cancelada', 'recusado', 'recusada', 'pendente'];
 const CANCELED_OR_REFUSED_STATUS_NAMES = ['cancelado', 'cancelada', 'recusado', 'recusada', 'estornado', 'estornada'];
 
 export interface BlingToken {
@@ -26,15 +25,22 @@ export const blingApi = {
     ).toString().trim().toLowerCase(),
 
     isAtendidoOrManual: (pedido: any): boolean => {
-        const situacaoId = pedido?.situacao?.id ?? pedido?.situacao_id;
         const rawStatusName = blingApi.getStatusName(pedido);
 
         if (rawStatusName) {
             if (BLOCKED_SALE_STATUS_NAMES.some((status) => rawStatusName.includes(status))) return false;
             if (VALID_SALE_STATUS_NAMES.some((status) => rawStatusName.includes(status))) return true;
+            return false;
         }
 
-        return situacaoId === null || situacaoId === undefined || Number(situacaoId) === BLING_STATUS_ATENDIDO;
+        const source = pedido?.source ?? pedido?.raw?.source;
+        const situacaoId = pedido?.situacao?.id ?? pedido?.situacao_id;
+
+        if (source === 'bling' || (situacaoId !== null && situacaoId !== undefined)) {
+            return false;
+        }
+
+        return true;
     },
 
     isCanceledOrRefused: (pedido: any): boolean => {
@@ -201,8 +207,7 @@ export const blingApi = {
         // expand[]=itens e expand[]=contato são CRÍTICOS para análise no dashboard
         let endpoint = `/pedidos/vendas?pagina=${pagina}&limite=${limite}&expand[]=itens&expand[]=contato`;
 
-        // Sem data, busca apenas Atendidos. Em Aberto não entra nas métricas porque pode virar recusado/cancelado.
-        const situacao = status || (dataInicial ? undefined : String(BLING_STATUS_ATENDIDO));
+        const situacao = status;
 
         if (situacao) endpoint += `&situacao=${situacao}`;
         if (dataInicial) endpoint += `&dataInicial=${dataInicial}`;
@@ -280,20 +285,74 @@ export const blingApi = {
         updated: number;
         skipped: number;
     }> => {
-        const { data, error } = await supabase.functions.invoke('bling-sync', {
-            body: { action: 'reconcile-canceled' }
-        });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Usuário não autenticado');
 
-        if (error) {
-            console.error('Erro ao cancelar vendas Bling:', error);
-            throw new Error(error.message || 'Erro ao cancelar vendas');
+        let checked = 0;
+        let updated = 0;
+        let skipped = 0;
+        let page = 0;
+        const localOrders: Array<{ id: number }> = [];
+
+        while (true) {
+            const { data, error } = await (supabase as any)
+                .from('bling_pedidos')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('source', 'bling')
+                .range(page * 100, (page + 1) * 100 - 1);
+
+            if (error) throw new Error('Erro ao buscar pedidos locais: ' + error.message);
+            if (!data || data.length === 0) break;
+
+            localOrders.push(...data);
+            if (data.length < 100) break;
+            page++;
         }
 
-        if ((data as any)?.success === false) {
-            throw new Error((data as any).error || 'Erro ao cancelar vendas');
+        for (const order of localOrders) {
+            try {
+                const detailResponse = await blingApi._fetch(`/pedidos/vendas/${order.id}`);
+                const detail = detailResponse?.data;
+                checked++;
+
+                if (!detail) {
+                    skipped++;
+                    continue;
+                }
+
+                const rawItens = Array.isArray(detail.itens)
+                    ? detail.itens
+                    : (Array.isArray(detail.itens?.data) ? detail.itens.data : []);
+
+                const { error } = await (supabase as any)
+                    .from('bling_pedidos')
+                    .update({
+                        situacao_id: detail.situacao?.id ?? null,
+                        situacao_nome: detail.situacao?.nome ?? detail.situacao?.descricao ?? 'Sem situação',
+                        total: Number(detail.total || 0),
+                        itens: rawItens.map((item: any) => ({
+                            codigo: String(item.codigo || item.produto?.codigo || '').trim(),
+                            nome: String(item.descricao || item.nome || item.produto?.descricao || '').trim(),
+                            quantidade: Number(item.quantidade || 1),
+                            valorUnidade: Number(item.valor || item.valorUnidade || item.preco || 0),
+                        })),
+                        raw: detail,
+                        synced_at: new Date().toISOString(),
+                    })
+                    .eq('user_id', user.id)
+                    .eq('id', order.id);
+
+                if (error) throw error;
+                updated++;
+                await new Promise((resolve) => setTimeout(resolve, 250));
+            } catch (error) {
+                console.warn('Pedido ignorado na conferência do Bling:', order.id, error);
+                skipped++;
+            }
         }
 
-        return data;
+        return { checked, updated, skipped };
     },
 
     /**
@@ -719,8 +778,8 @@ export const blingApi = {
                 }
             }
 
-            // Mostrar pedidos Atendidos (6). Pedidos em aberto ficam fora até virarem atendidos.
-            // Pedidos manuais (sem situacao_id) também são incluídos
+            // Mostrar apenas pedidos com situação Atendido. Pedidos em aberto ficam fora até virarem atendidos.
+            // Pedidos manuais sem situação do Bling também são incluídos.
             if (!blingApi.isAtendidoOrManual(p)) return;
 
             let orderValueForBrand = 0;
@@ -1285,7 +1344,7 @@ export const blingApi = {
         while (hasMorePeds) {
             const { data, error } = await (supabase as any)
                 .from('bling_pedidos')
-                .select('contato_id, contato_nome, total, data, situacao_id')
+                .select('contato_id, contato_nome, total, data, situacao_id, situacao_nome, source, raw')
                 .eq('user_id', user.id)
                 .range(pedPage * 1000, (pedPage + 1) * 1000 - 1);
 
@@ -1346,7 +1405,7 @@ export const blingApi = {
         }> = {};
 
         allPedidos.forEach((p: any) => {
-            if (p.situacao_id === 12) return; // Ignorar cancelados
+            if (!blingApi.isAtendidoOrManual(p)) return;
             if (p.contato_nome?.toLowerCase().includes('consumidor final')) return; // Ignorar genérico
 
             // 1. Tenta por ID (Bling ID ou CRM ID)
@@ -1475,8 +1534,8 @@ export const blingApi = {
         const brandMetrics: Record<string, { label: string; faturamento: number; qtdItens: number }> = {};
 
         pedidos.forEach((p: any) => {
-            // Filtrar pedidos Atendidos (6). Pedidos em aberto ficam fora até virarem atendidos.
-            // Pedidos manuais (sem situacao_id) também são incluídos
+            // Filtrar pedidos com situação Atendido. Pedidos em aberto ficam fora até virarem atendidos.
+            // Pedidos manuais sem situação do Bling também são incluídos.
             if (!blingApi.isAtendidoOrManual(p)) return;
 
             // Suporta formato novo (array normalizado) ou antigo (p.itens.data)
@@ -1579,8 +1638,8 @@ export const blingApi = {
         const productMetrics: Record<string, { nome: string; codigo: string; marca: string; faturamento: number; qtd: number }> = {};
 
         pedidos.forEach((p: any) => {
-            // Filtrar pedidos Atendidos (6). Pedidos em aberto ficam fora até virarem atendidos.
-            // Pedidos manuais (sem situacao_id) também são incluídos
+            // Filtrar pedidos com situação Atendido. Pedidos em aberto ficam fora até virarem atendidos.
+            // Pedidos manuais sem situação do Bling também são incluídos.
             if (!blingApi.isAtendidoOrManual(p)) return;
 
             const itens = Array.isArray(p.itens) ? p.itens : (Array.isArray(p.itens?.data) ? p.itens.data : []);

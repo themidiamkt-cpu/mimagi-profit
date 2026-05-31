@@ -37,7 +37,6 @@ async function reconcileCanceledOrders(supabase: any, userId: string, accessToke
             .select('id')
             .eq('user_id', userId)
             .eq('source', 'bling')
-            .eq('situacao_id', 6)
             .range(page * 100, (page + 1) * 100 - 1);
 
         if (error) throw new Error('Erro ao buscar pedidos locais: ' + error.message);
@@ -59,21 +58,20 @@ async function reconcileCanceledOrders(supabase: any, userId: string, accessToke
         }
 
         const statusId = detail.situacao?.id ?? null;
-        if (statusId !== 6) {
-            const { error: updateError } = await supabase
-                .from('bling_pedidos')
-                .update({
-                    situacao_id: statusId,
-                    situacao_nome: detail.situacao?.nome ?? detail.situacao?.descricao ?? 'Não atendido',
-                    raw: detail,
-                    synced_at: new Date().toISOString(),
-                })
-                .eq('user_id', userId)
-                .eq('id', order.id);
+        const statusName = detail.situacao?.nome ?? detail.situacao?.descricao ?? 'Sem situação';
+        const { error: updateError } = await supabase
+            .from('bling_pedidos')
+            .update({
+                situacao_id: statusId,
+                situacao_nome: statusName,
+                raw: detail,
+                synced_at: new Date().toISOString(),
+            })
+            .eq('user_id', userId)
+            .eq('id', order.id);
 
-            if (updateError) throw new Error('Erro ao atualizar pedido cancelado: ' + updateError.message);
-            updated++;
-        }
+        if (updateError) throw new Error('Erro ao atualizar situação do pedido: ' + updateError.message);
+        updated++;
 
         await delay(250);
     }

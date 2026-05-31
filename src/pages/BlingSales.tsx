@@ -339,9 +339,9 @@ export function BlingSales() {
 
         try {
             const result = await blingApi.reconcileCanceledPedidos();
-            toast.success(`${result.updated} venda(s) removida(s) dos resultados.`, {
+            toast.success(`${result.updated} pedido(s) conferido(s) e atualizados.`, {
                 id: toastId,
-                description: `${result.checked} pedidos conferidos no Bling.`
+                description: `${result.checked} pedidos lidos no Bling. Em aberto sai do faturamento; Atendido entra.`
             });
             await fetchData();
         } catch (error: any) {
