@@ -115,9 +115,10 @@ const getOrderItems = (order: any) => Array.isArray(order?.itens) ? order.itens 
 interface GrowthCustomersProps {
   initialTab?: "list" | "crm" | "actions";
   standaloneTab?: boolean;
+  hiddenTabs?: Array<"list" | "crm" | "actions">;
 }
 
-export const GrowthCustomers = ({ initialTab = "list", standaloneTab = false }: GrowthCustomersProps) => {
+export const GrowthCustomers = ({ initialTab = "list", standaloneTab = false, hiddenTabs = [] }: GrowthCustomersProps) => {
   const { user } = useAuthContext();
   const [customers, setCustomers] = useState<GrowthCustomer[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -821,18 +822,24 @@ export const GrowthCustomers = ({ initialTab = "list", standaloneTab = false }: 
         {!standaloneTab && (
           <div className="flex items-center justify-between mb-6">
             <TabsList className="bg-white border border-gray-100 p-1 rounded-xl h-11">
-              <TabsTrigger value="list" className="rounded-lg px-6 data-[state=active]:bg-gray-50 data-[state=active]:shadow-none font-medium">
-                <Users className="h-4 w-4 mr-2" />
-                Lista de Clientes
-              </TabsTrigger>
-              <TabsTrigger value="crm" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium">
-                <TrendingUp className="h-4 w-4 mr-2" />
-                CRM
-              </TabsTrigger>
-              <TabsTrigger value="actions" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium text-amber-600">
-                <Sparkles className="h-4 w-4 mr-2" />
-                Ações Inteligentes
-              </TabsTrigger>
+              {!hiddenTabs.includes("list") && (
+                <TabsTrigger value="list" className="rounded-lg px-6 data-[state=active]:bg-gray-50 data-[state=active]:shadow-none font-medium">
+                  <Users className="h-4 w-4 mr-2" />
+                  Lista de Clientes
+                </TabsTrigger>
+              )}
+              {!hiddenTabs.includes("crm") && (
+                <TabsTrigger value="crm" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium">
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  CRM
+                </TabsTrigger>
+              )}
+              {!hiddenTabs.includes("actions") && (
+                <TabsTrigger value="actions" className="rounded-lg px-6 data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none font-medium text-amber-600">
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Análise Inteligente
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
         )}
