@@ -4,8 +4,7 @@ import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/
 const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const AVG_DAYS_PER_MONTH = 30.4375;
-const VALID_SALE_STATUS_NAMES = ['atendido'];
-const BLOCKED_SALE_STATUS_NAMES = ['não atendido', 'nao atendido', 'em aberto', 'aberto', 'em digitação', 'digitacao', 'digitação', 'em andamento', 'venda agenciada', 'cancelado', 'cancelada', 'recusado', 'recusada', 'pendente'];
+const BLING_STATUS_CANCELADO = 12;
 const CANCELED_OR_REFUSED_STATUS_NAMES = ['cancelado', 'cancelada', 'recusado', 'recusada', 'estornado', 'estornada'];
 
 export interface BlingToken {
@@ -25,26 +24,20 @@ export const blingApi = {
     ).toString().trim().toLowerCase(),
 
     isAtendidoOrManual: (pedido: any): boolean => {
-        const rawStatusName = blingApi.getStatusName(pedido);
+        const situacaoId = Number(pedido?.situacao?.id ?? pedido?.situacao_id);
 
-        if (rawStatusName) {
-            if (BLOCKED_SALE_STATUS_NAMES.some((status) => rawStatusName.includes(status))) return false;
-            if (VALID_SALE_STATUS_NAMES.some((status) => rawStatusName.includes(status))) return true;
-            return false;
-        }
+        if (blingApi.isCanceledOrRefused(pedido)) return false;
 
         const source = pedido?.source ?? pedido?.raw?.source;
-        const situacaoId = pedido?.situacao?.id ?? pedido?.situacao_id;
-
-        if (source === 'bling' || (situacaoId !== null && situacaoId !== undefined)) {
-            return false;
-        }
+        if (source === 'bling' || Number.isFinite(situacaoId)) return true;
 
         return true;
     },
 
     isCanceledOrRefused: (pedido: any): boolean => {
         const rawStatusName = blingApi.getStatusName(pedido);
+        const situacaoId = Number(pedido?.situacao?.id ?? pedido?.situacao_id);
+        if (situacaoId === BLING_STATUS_CANCELADO) return true;
         return CANCELED_OR_REFUSED_STATUS_NAMES.some((status) => rawStatusName.includes(status));
     },
 
@@ -277,8 +270,8 @@ export const blingApi = {
     },
 
     /**
-     * Revalida no Bling os pedidos salvos como atendidos e atualiza no SaaS
-     * aqueles que foram cancelados, recusados ou voltaram para em aberto.
+     * Revalida no Bling os pedidos salvos e atualiza no SaaS
+     * aqueles que foram cancelados, recusados ou tiveram situação alterada.
      */
     reconcileCanceledPedidos: async (): Promise<{
         checked: number;
@@ -778,8 +771,7 @@ export const blingApi = {
                 }
             }
 
-            // Mostrar apenas pedidos com situação Atendido. Pedidos em aberto ficam fora até virarem atendidos.
-            // Pedidos manuais sem situação do Bling também são incluídos.
+            // O painel operacional soma pedidos do período e remove apenas cancelados/recusados.
             if (!blingApi.isAtendidoOrManual(p)) return;
 
             let orderValueForBrand = 0;
@@ -1534,8 +1526,7 @@ export const blingApi = {
         const brandMetrics: Record<string, { label: string; faturamento: number; qtdItens: number }> = {};
 
         pedidos.forEach((p: any) => {
-            // Filtrar pedidos com situação Atendido. Pedidos em aberto ficam fora até virarem atendidos.
-            // Pedidos manuais sem situação do Bling também são incluídos.
+            // Filtrar apenas pedidos cancelados/recusados.
             if (!blingApi.isAtendidoOrManual(p)) return;
 
             // Suporta formato novo (array normalizado) ou antigo (p.itens.data)
@@ -1638,8 +1629,7 @@ export const blingApi = {
         const productMetrics: Record<string, { nome: string; codigo: string; marca: string; faturamento: number; qtd: number }> = {};
 
         pedidos.forEach((p: any) => {
-            // Filtrar pedidos com situação Atendido. Pedidos em aberto ficam fora até virarem atendidos.
-            // Pedidos manuais sem situação do Bling também são incluídos.
+            // Filtrar apenas pedidos cancelados/recusados.
             if (!blingApi.isAtendidoOrManual(p)) return;
 
             const itens = Array.isArray(p.itens) ? p.itens : (Array.isArray(p.itens?.data) ? p.itens.data : []);
