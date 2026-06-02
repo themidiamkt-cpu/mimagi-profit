@@ -135,6 +135,36 @@ export function useAuth() {
       if (error) throw error;
 
       if (data.user) {
+        const profilePayload = {
+          id: data.user.id,
+          nome: signUpData.nome.trim(),
+          whatsapp: signUpData.whatsapp.trim(),
+          email: signUpData.email.trim().toLowerCase(),
+          nome_loja: signUpData.nome_loja.trim(),
+          instagram_loja: signUpData.instagram_loja.trim() || null,
+          faturamento_atual: signUpData.faturamento_atual || 0,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert(profilePayload, { onConflict: 'id' });
+
+        if (profileError) {
+          console.warn('Profile fallback upsert failed after signup:', profileError);
+        }
+
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .upsert(
+            { user_id: data.user.id, role: 'pending' },
+            { onConflict: 'user_id,role', ignoreDuplicates: true }
+          );
+
+        if (roleError) {
+          console.warn('Role fallback upsert failed after signup:', roleError);
+        }
+
         toast({
           title: 'Conta criada com sucesso!',
           description: 'Verifique seu e-mail para confirmar seu cadastro e aguarde a aprovação.',
