@@ -209,36 +209,55 @@ const Produtos: React.FC = () => {
         try {
             setSaving(true);
             const productId = await generateHashId(newProduct.codigo, user.id);
+            const productCode = newProduct.codigo.trim();
+            const productPayload = {
+                codigo: productCode,
+                nome: newProduct.nome.trim(),
+                marca: newProduct.marca.trim(),
+                preco: parseOptionalNumber(newProduct.preco),
+                categoria: newProduct.categoria || null,
+                imagem_url: newProduct.imagem_url || null,
+                descricao: newProduct.descricao || null,
+                colecao: newProduct.colecao || null,
+                tamanho: newProduct.tamanho || null,
+                cor: newProduct.cor || null,
+                genero: newProduct.genero || 'unissex',
+                custo: parseOptionalNumber(newProduct.custo),
+                estoque_atual: parseOptionalNumber(newProduct.estoque_atual),
+                estoque_minimo: parseOptionalNumber(newProduct.estoque_minimo),
+                fornecedor: newProduct.fornecedor || null,
+                codigo_barras: newProduct.codigo_barras || null,
+                ncm: newProduct.ncm || null,
+                status: newProduct.status || 'ativo',
+                observacoes: newProduct.observacoes || null,
+                user_id: user.id
+            };
 
-            const { error } = await (supabase as any)
+            const { data: existingProduct, error: findError } = await (supabase as any)
                 .from('bling_produtos')
-                .upsert({
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('codigo', productCode)
+                .maybeSingle();
+
+            if (findError) throw findError;
+
+            const { error } = existingProduct?.id
+                ? await (supabase as any)
+                    .from('bling_produtos')
+                    .update(productPayload)
+                    .eq('id', existingProduct.id)
+                    .eq('user_id', user.id)
+                : await (supabase as any)
+                    .from('bling_produtos')
+                    .insert({
                     id: parseInt(productId),
-                    codigo: newProduct.codigo.trim(),
-                    nome: newProduct.nome.trim(),
-                    marca: newProduct.marca.trim(),
-                    preco: parseOptionalNumber(newProduct.preco),
-                    categoria: newProduct.categoria || null,
-                    imagem_url: newProduct.imagem_url || null,
-                    descricao: newProduct.descricao || null,
-                    colecao: newProduct.colecao || null,
-                    tamanho: newProduct.tamanho || null,
-                    cor: newProduct.cor || null,
-                    genero: newProduct.genero || 'unissex',
-                    custo: parseOptionalNumber(newProduct.custo),
-                    estoque_atual: parseOptionalNumber(newProduct.estoque_atual),
-                    estoque_minimo: parseOptionalNumber(newProduct.estoque_minimo),
-                    fornecedor: newProduct.fornecedor || null,
-                    codigo_barras: newProduct.codigo_barras || null,
-                    ncm: newProduct.ncm || null,
-                    status: newProduct.status || 'ativo',
-                    observacoes: newProduct.observacoes || null,
-                    user_id: user.id
+                    ...productPayload
                 });
 
             if (error) throw error;
 
-            toast.success('Produto cadastrado com sucesso!');
+            toast.success(existingProduct?.id ? 'Produto atualizado com sucesso!' : 'Produto cadastrado com sucesso!');
             setIsAddDialogOpen(false);
             setNewProduct(emptyProductForm);
             fetchProducts();
