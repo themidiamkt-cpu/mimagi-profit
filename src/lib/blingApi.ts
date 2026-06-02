@@ -288,12 +288,24 @@ export const blingApi = {
         const localOrders: Array<{ id: number }> = [];
 
         while (true) {
-            const { data, error } = await (supabase as any)
+            let query = (supabase as any)
                 .from('bling_pedidos')
                 .select('id')
                 .eq('user_id', user.id)
-                .eq('source', 'bling')
                 .range(page * 100, (page + 1) * 100 - 1);
+            query = query.eq('source', 'bling');
+
+            let { data, error } = await query;
+
+            if (error?.code === '42703' || error?.code === 'PGRST204') {
+                const retry = await (supabase as any)
+                    .from('bling_pedidos')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .range(page * 100, (page + 1) * 100 - 1);
+                data = retry.data;
+                error = retry.error;
+            }
 
             if (error) throw new Error('Erro ao buscar pedidos locais: ' + error.message);
             if (!data || data.length === 0) break;
@@ -1334,11 +1346,21 @@ export const blingApi = {
         let hasMorePeds = true;
 
         while (hasMorePeds) {
-            const { data, error } = await (supabase as any)
+            let { data, error } = await (supabase as any)
                 .from('bling_pedidos')
                 .select('contato_id, contato_nome, total, data, situacao_id, situacao_nome, source, raw')
                 .eq('user_id', user.id)
                 .range(pedPage * 1000, (pedPage + 1) * 1000 - 1);
+
+            if (error?.code === '42703' || error?.code === 'PGRST204') {
+                const retry = await (supabase as any)
+                    .from('bling_pedidos')
+                    .select('contato_id, contato_nome, total, data, situacao_id, situacao_nome, raw')
+                    .eq('user_id', user.id)
+                    .range(pedPage * 1000, (pedPage + 1) * 1000 - 1);
+                data = retry.data;
+                error = retry.error;
+            }
 
             if (error) throw error;
             if (data && data.length > 0) {

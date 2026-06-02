@@ -41,6 +41,15 @@ const normalizeLookupKey = (value?: string | null) => {
         .replace(/[\u0300-\u036f]/g, "");
 };
 
+const stripUnsupportedBlingPedidoColumns = (row: any, missingColumns: Set<string>) => {
+    if (!missingColumns.size) return row;
+    const clean = { ...row };
+    missingColumns.forEach((column) => {
+        delete clean[column];
+    });
+    return clean;
+};
+
 export function SpreadsheetEditor() {
     const { user } = useAuthContext();
     const [data, setData] = useState<SpreadsheetData>(DEFAULT_DATA);
@@ -436,7 +445,17 @@ export function SpreadsheetEditor() {
                 const existingIds = new Set((existingPedidos || []).map((pedido: any) => String(pedido.id)));
                 const pedidosToNotify = mappedPedidos.filter((pedido) => !existingIds.has(String(pedido.id)));
 
-                const { error } = await supabase.from('bling_pedidos').upsert(mappedPedidos);
+                let pedidosToUpsert = mappedPedidos;
+                const missingPedidoColumns = new Set<string>();
+                let { error } = await (supabase as any).from('bling_pedidos').upsert(pedidosToUpsert);
+
+                if (error?.code === 'PGRST204' && error.message?.includes("'source'")) {
+                    missingPedidoColumns.add('source');
+                    pedidosToUpsert = mappedPedidos.map((pedido) => stripUnsupportedBlingPedidoColumns(pedido, missingPedidoColumns));
+                    const retry = await (supabase as any).from('bling_pedidos').upsert(pedidosToUpsert);
+                    error = retry.error;
+                }
+
                 if (error) throw error;
 
                 for (const pedido of pedidosToNotify) {
