@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Search, Plus, Package, Image as ImageIcon } from 'lucide-react';
@@ -94,12 +94,14 @@ const formatMoney = (value?: number | null) => {
 
 const Produtos: React.FC = () => {
     const { user } = useAuthContext();
+    const productImageInputRef = useRef<HTMLInputElement | null>(null);
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [newProduct, setNewProduct] = useState(emptyProductForm);
     const [saving, setSaving] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
 
     const fetchProducts = async () => {
         if (!user) return;
@@ -150,6 +152,50 @@ const Produtos: React.FC = () => {
             id = (id << 8n) | BigInt(hashArray[i]);
         }
         return id.toString();
+    };
+
+    const uploadProductImage = async (file: File) => {
+        if (!user) return;
+
+        if (!file.type.startsWith('image/')) {
+            toast.error('Selecione um arquivo de imagem.');
+            return;
+        }
+
+        try {
+            setUploadingImage(true);
+            const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+            const safeSku = (newProduct.codigo || 'produto')
+                .toLowerCase()
+                .replace(/[^a-z0-9_-]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'produto';
+            const filePath = `${user.id}/${safeSku}-${Date.now()}.${extension}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('product-images')
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: true,
+                });
+
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage
+                .from('product-images')
+                .getPublicUrl(filePath);
+
+            setNewProduct((current) => ({
+                ...current,
+                imagem_url: data.publicUrl,
+            }));
+            toast.success('Imagem enviada com sucesso!');
+        } catch (error: any) {
+            console.error('Erro ao enviar imagem do produto:', error);
+            toast.error('Erro ao enviar imagem: ' + (error.message || 'verifique o bucket product-images'));
+        } finally {
+            setUploadingImage(false);
+            if (productImageInputRef.current) productImageInputRef.current.value = '';
+        }
     };
 
     const handleAddProduct = async (e: React.FormEvent) => {
@@ -231,7 +277,11 @@ const Produtos: React.FC = () => {
                                 </DialogHeader>
                                 <div className="grid gap-6 py-5 lg:grid-cols-[260px_1fr]">
                                     <div className="space-y-4">
-                                        <div className="flex aspect-square items-center justify-center overflow-hidden rounded-lg border bg-slate-50">
+                                        <button
+                                            type="button"
+                                            className="group relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg border bg-slate-50 transition hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
+                                            onClick={() => productImageInputRef.current?.click()}
+                                        >
                                             {newProduct.imagem_url ? (
                                                 <img
                                                     src={newProduct.imagem_url}
@@ -244,10 +294,25 @@ const Produtos: React.FC = () => {
                                             ) : (
                                                 <div className="flex flex-col items-center gap-3 text-slate-400">
                                                     <ImageIcon className="h-12 w-12" />
-                                                    <span className="text-sm">Imagem do produto</span>
+                                                    <span className="text-sm">{uploadingImage ? 'Enviando...' : 'Clique para enviar imagem'}</span>
                                                 </div>
                                             )}
-                                        </div>
+                                            {newProduct.imagem_url && (
+                                                <div className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">
+                                                    {uploadingImage ? 'Enviando...' : 'Trocar imagem'}
+                                                </div>
+                                            )}
+                                        </button>
+                                        <input
+                                            ref={productImageInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={(event) => {
+                                                const file = event.target.files?.[0];
+                                                if (file) uploadProductImage(file);
+                                            }}
+                                        />
                                         <div className="grid gap-2">
                                             <Label htmlFor="image">URL da imagem</Label>
                                             <Input
@@ -255,6 +320,7 @@ const Produtos: React.FC = () => {
                                                 value={newProduct.imagem_url}
                                                 onChange={(e) => setNewProduct({ ...newProduct, imagem_url: e.target.value })}
                                                 placeholder="https://..."
+                                                disabled={uploadingImage}
                                             />
                                         </div>
                                         <div className="grid gap-2">
